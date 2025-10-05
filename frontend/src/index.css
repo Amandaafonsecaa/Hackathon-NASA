@@ -150,6 +150,98 @@
   animation: pulse 2s infinite;
 }
 
+/* Estilos para evitar tremores nos botões */
+button {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Estilos específicos para botões de preset */
+.preset-button {
+  position: relative;
+  overflow: hidden;
+  transform: translateZ(0);
+  will-change: transform, background-color;
+}
+
+.preset-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: left 0.5s;
+}
+
+.preset-button:hover::before {
+  left: 100%;
+}
+
+/* Estilos para o botão de simulação */
+.simulation-button {
+  position: relative;
+  overflow: hidden;
+  transform: translateZ(0);
+  will-change: transform, background-color, box-shadow;
+}
+
+.simulation-button:not(:disabled):hover {
+  transform: translateZ(0) scale(1.02);
+}
+
+.simulation-button:disabled {
+  transform: translateZ(0);
+  cursor: not-allowed;
+}
+
+/* Estilos para spinner melhorado */
+.spinner {
+  animation: spin 1s linear infinite;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Estilos para evitar flickering */
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .5;
+  }
+}
+
+/* Estilos para transições suaves */
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Estilos para o mapa */
+.leaflet-container {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.leaflet-control-container {
+  transform: translateZ(0);
+}
+
 /* Estilos para scrollbars customizados */
 ::-webkit-scrollbar {
   width: 8px;

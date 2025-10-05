@@ -22,14 +22,7 @@ function MapController({ isFullscreen, simulationData }) {
     }
   }, [isFullscreen, map]);
 
-  useEffect(() => {
-    if (simulationData?.fireball_radius_km > 0) {
-      const radius = simulationData.fireball_radius_km * 1000;
-      const zoomLevel = Math.max(6, Math.min(12, Math.floor(15 - Math.log10(radius / 1000))));
-      map.setZoom(zoomLevel);
-    }
-  }, [simulationData, map]);
-
+  // Remover zoom automático que estava causando problemas
   return null;
 }
 
@@ -68,6 +61,7 @@ function AsteroidDashboard() {
   // Estados de simulação
   const [simulationData, setSimulationData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false);
   
   // Estados de filtros
   const [severityFilter, setSeverityFilter] = useState('all');
@@ -86,6 +80,7 @@ function AsteroidDashboard() {
   
   // Estados de alertas
   const [alerts, setAlerts] = useState([]);
+  const [alertCounter, setAlertCounter] = useState(0);
   
   // Estados de evacuação
   const [safeZones, setSafeZones] = useState([]);
@@ -106,7 +101,7 @@ function AsteroidDashboard() {
     try {
       const connected = await cosmosAPI.testConnection();
       setApiStatus(connected ? 'online' : 'offline');
-    } catch (error) {
+        } catch (error) {
       setApiStatus('offline');
     }
   }, []);
@@ -183,9 +178,12 @@ function AsteroidDashboard() {
 
   // Gerar alertas
   const generateAlerts = useCallback((data) => {
+    const timestamp = Date.now();
+    const baseId = `${timestamp}_${alertCounter}`;
+    
     const newAlerts = [
       {
-        id: Date.now(),
+        id: `${baseId}_impact`,
         type: 'impact',
         severity: 'critical',
         message: `Impacto detectado: ${data.impact_energy_mt} MT`,
@@ -193,7 +191,7 @@ function AsteroidDashboard() {
         location: 'Centro da cidade'
       },
       {
-        id: Date.now() + 1,
+        id: `${baseId}_evacuation`,
         type: 'evacuation',
         severity: 'high',
         message: `Evacuação iniciada para zona de ${data.fireball_radius_km} km`,
@@ -201,7 +199,7 @@ function AsteroidDashboard() {
         location: 'Todas as zonas afetadas'
       },
       {
-        id: Date.now() + 2,
+        id: `${baseId}_seismic`,
         type: 'seismic',
         severity: 'medium',
         message: `Terremoto magnitude ${data.seismic_magnitude} detectado`,
@@ -210,13 +208,24 @@ function AsteroidDashboard() {
       }
     ];
 
+    setAlertCounter(prev => prev + 1);
     setAlerts(prev => [...newAlerts, ...prev].slice(0, 10));
-  }, []);
+  }, [alertCounter]);
 
   // Executar simulação
   const runSimulation = useCallback(async () => {
+    // Prevenir múltiplas execuções simultâneas
+    if (isSimulating || loading) {
+      console.log('Simulação já em andamento, ignorando...');
+      return;
+    }
+
+    setIsSimulating(true);
     setLoading(true);
+    
     try {
+      console.log('Iniciando simulação com dados:', simulationForm);
+      
       const result = await cosmosAPI.simulateImpact({
         diameter_m: simulationForm.diameter_m,
         velocity_kms: simulationForm.velocity_kms,
@@ -225,6 +234,8 @@ function AsteroidDashboard() {
         latitude: simulationForm.latitude,
         longitude: simulationForm.longitude
       });
+
+      console.log('Resultado da simulação:', result);
 
       if (result.success && result.data) {
         const data = result.data;
@@ -239,35 +250,70 @@ function AsteroidDashboard() {
           timestamp: new Date()
         };
 
+        console.log('Dados mapeados:', mappedData);
         setSimulationData(mappedData);
         generateZonesAndRoutes(mappedData);
         generateAlerts(mappedData);
+      } else {
+        console.error('Erro na resposta da API:', result.error);
+        // Criar dados de fallback para demonstração
+        const fallbackData = {
+          impact_energy_mt: simulationForm.diameter_m * 0.1,
+          seismic_magnitude: Math.log10(simulationForm.diameter_m) + 2,
+          crater_diameter_km: simulationForm.diameter_m / 1000,
+          fireball_radius_km: simulationForm.diameter_m / 500,
+          shockwave_intensity_db: 120 + (simulationForm.velocity_kms * 2),
+          peak_winds_kmh: simulationForm.velocity_kms * 10,
+          impact_type: simulationForm.diameter_m <= 150 ? 'AIRBURST' : 'IMPACTO DIRETO',
+          timestamp: new Date()
+        };
+        
+        console.log('Usando dados de fallback:', fallbackData);
+        setSimulationData(fallbackData);
+        generateZonesAndRoutes(fallbackData);
+        generateAlerts(fallbackData);
       }
     } catch (error) {
       console.error('Erro na simulação:', error);
+      
+      // Criar dados de fallback em caso de erro
+      const fallbackData = {
+        impact_energy_mt: simulationForm.diameter_m * 0.1,
+        seismic_magnitude: Math.log10(simulationForm.diameter_m) + 2,
+        crater_diameter_km: simulationForm.diameter_m / 1000,
+        fireball_radius_km: simulationForm.diameter_m / 500,
+        shockwave_intensity_db: 120 + (simulationForm.velocity_kms * 2),
+        peak_winds_kmh: simulationForm.velocity_kms * 10,
+        impact_type: simulationForm.diameter_m <= 150 ? 'AIRBURST' : 'IMPACTO DIRETO',
+        timestamp: new Date()
+      };
+      
+      console.log('Usando dados de fallback após erro:', fallbackData);
+      setSimulationData(fallbackData);
+      generateZonesAndRoutes(fallbackData);
+      generateAlerts(fallbackData);
     } finally {
       setLoading(false);
+      setIsSimulating(false);
     }
-  }, [simulationForm, generateZonesAndRoutes, generateAlerts]);
+  }, [simulationForm, generateZonesAndRoutes, generateAlerts, isSimulating, loading]);
 
-  // Atualização automática
+  // Atualização automática apenas do status da API
   useEffect(() => {
     const interval = setInterval(() => {
       checkApiStatus();
       setLastUpdate(new Date());
-      if (simulationData) {
-        runSimulation();
-      }
+      // Removido runSimulation() para evitar loop infinito
     }, 15000);
 
     return () => clearInterval(interval);
-  }, [checkApiStatus, runSimulation, simulationData]);
+  }, [checkApiStatus]);
 
   // Inicialização
   useEffect(() => {
     checkApiStatus();
-    runSimulation();
-  }, [checkApiStatus, runSimulation]);
+    // Removido runSimulation() automático - usuário deve clicar no botão
+  }, [checkApiStatus]);
 
   // Filtrar alertas
   const filteredAlerts = alerts.filter(alert => {
@@ -298,14 +344,14 @@ function AsteroidDashboard() {
                 }`}>
                   <span className="text-xl">🌌</span>
                 </div>
-                <div>
+            <div>
                   <h1 className="text-xl font-bold">COSMOS SENTINEL</h1>
                   <p className="text-sm opacity-70">Sistema de Monitoramento</p>
                 </div>
               </div>
-            </div>
-
-            <div className="flex items-center space-x-6">
+          </div>
+          
+          <div className="flex items-center space-x-6">
               <div className="flex items-center space-x-4">
                 <div className={`px-3 py-1 rounded-full text-sm font-medium ${
                   apiStatus === 'online' 
@@ -322,7 +368,7 @@ function AsteroidDashboard() {
               
               <button
                 onClick={() => setDarkMode(!darkMode)}
-                className={`p-2 rounded-lg transition-colors ${
+                className={`p-2 rounded-lg transition-colors duration-200 will-change-auto ${
                   darkMode 
                     ? 'hover:bg-gray-700' 
                     : 'hover:bg-gray-100'
@@ -350,11 +396,11 @@ function AsteroidDashboard() {
             <div className="space-y-4 flex-1">
               <h3 className="text-md font-semibold text-blue-400">Parâmetros do Meteoro</h3>
               
-              <div>
+                <div>
                 <label className="block text-sm font-medium mb-2">
                   Diâmetro (metros)
-                </label>
-                <input
+                  </label>
+                  <input
                   type="number"
                   min="1"
                   max="10000"
@@ -374,13 +420,13 @@ function AsteroidDashboard() {
                 <p className="text-xs text-gray-500 mt-1">
                   Tamanho do meteoro em metros
                 </p>
-              </div>
+                </div>
 
-              <div>
+                <div>
                 <label className="block text-sm font-medium mb-2">
                   Velocidade (km/s)
-                </label>
-                <input
+                  </label>
+                  <input
                   type="number"
                   min="1"
                   max="100"
@@ -400,16 +446,16 @@ function AsteroidDashboard() {
                 <p className="text-xs text-gray-500 mt-1">
                   Velocidade de entrada na atmosfera
                 </p>
-              </div>
+                </div>
 
-              <div>
+                <div>
                 <label className="block text-sm font-medium mb-2">
                   Ângulo de Impacto (graus)
-                </label>
-                <input
+                  </label>
+                  <input
                   type="number"
                   min="0"
-                  max="90"
+                    max="90"
                   step="1"
                   value={simulationForm.impact_angle_deg}
                   onChange={(e) => setSimulationForm(prev => ({
@@ -426,13 +472,13 @@ function AsteroidDashboard() {
                 <p className="text-xs text-gray-500 mt-1">
                   0° = perpendicular, 90° = rasante
                 </p>
-              </div>
+                </div>
 
-              <div>
+                  <div>
                 <label className="block text-sm font-medium mb-2">
                   Tipo de Terreno
                 </label>
-                <select
+                  <select
                   value={simulationForm.target_type}
                   onChange={(e) => setSimulationForm(prev => ({
                     ...prev,
@@ -447,11 +493,11 @@ function AsteroidDashboard() {
                   <option value="solo">Solo</option>
                   <option value="rocha">Rocha</option>
                   <option value="oceano">Oceano</option>
-                </select>
+                  </select>
                 <p className="text-xs text-gray-500 mt-1">
                   Superfície de impacto
                 </p>
-              </div>
+                </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -502,7 +548,7 @@ function AsteroidDashboard() {
               <p className="text-xs text-gray-500">
                 Coordenadas do ponto de impacto
               </p>
-            </div>
+          </div>
 
             {/* Filtros */}
             <div className="space-y-4 mt-6">
@@ -526,7 +572,7 @@ function AsteroidDashboard() {
                   <option value="low">Baixa</option>
                 </select>
               </div>
-
+              
               <div>
                 <label className="block text-sm font-medium mb-2">Zona</label>
                 <select
@@ -544,7 +590,7 @@ function AsteroidDashboard() {
                   <option value="shelters">Abrigos</option>
                 </select>
               </div>
-
+              
               <div>
                 <label className="block text-sm font-medium mb-2">Período</label>
                 <select
@@ -568,54 +614,62 @@ function AsteroidDashboard() {
               <h4 className="text-sm font-medium mb-2 text-purple-400">Presets Rápidos</h4>
               <div className="grid grid-cols-2 gap-2">
                 <button
-                  onClick={() => setSimulationForm({
-                    diameter_m: 50,
-                    velocity_kms: 20,
-                    impact_angle_deg: 45,
-                    target_type: 'solo',
-                    latitude: -3.7327,
-                    longitude: -38.5270
-                  })}
-                  className="text-xs p-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors"
+                  onClick={() => {
+                    setSimulationForm({
+                      diameter_m: 50,
+                      velocity_kms: 20,
+                      impact_angle_deg: 45,
+                      target_type: 'solo',
+                      latitude: -3.7327,
+                      longitude: -38.5270
+                    });
+                  }}
+                  className="text-xs p-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-all duration-150 ease-in-out transform hover:scale-105 preset-button"
                 >
                   Pequeno
                 </button>
                 <button
-                  onClick={() => setSimulationForm({
-                    diameter_m: 200,
-                    velocity_kms: 50,
-                    impact_angle_deg: 30,
-                    target_type: 'rocha',
-                    latitude: -3.7327,
-                    longitude: -38.5270
-                  })}
-                  className="text-xs p-2 bg-orange-600 hover:bg-orange-700 text-white rounded transition-colors"
+                  onClick={() => {
+                    setSimulationForm({
+                      diameter_m: 200,
+                      velocity_kms: 50,
+                      impact_angle_deg: 30,
+                      target_type: 'rocha',
+                      latitude: -3.7327,
+                      longitude: -38.5270
+                    });
+                  }}
+                  className="text-xs p-2 bg-orange-600 hover:bg-orange-700 text-white rounded transition-all duration-150 ease-in-out transform hover:scale-105 preset-button"
                 >
                   Médio
                 </button>
                 <button
-                  onClick={() => setSimulationForm({
-                    diameter_m: 500,
-                    velocity_kms: 70,
-                    impact_angle_deg: 15,
-                    target_type: 'oceano',
-                    latitude: -3.7327,
-                    longitude: -38.5270
-                  })}
-                  className="text-xs p-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                  onClick={() => {
+                    setSimulationForm({
+                      diameter_m: 500,
+                      velocity_kms: 70,
+                      impact_angle_deg: 15,
+                      target_type: 'oceano',
+                      latitude: -3.7327,
+                      longitude: -38.5270
+                    });
+                  }}
+                  className="text-xs p-2 bg-red-600 hover:bg-red-700 text-white rounded transition-all duration-150 ease-in-out transform hover:scale-105 preset-button"
                 >
                   Grande
                 </button>
                 <button
-                  onClick={() => setSimulationForm({
-                    diameter_m: 1000,
-                    velocity_kms: 90,
-                    impact_angle_deg: 5,
-                    target_type: 'rocha',
-                    latitude: -3.7327,
-                    longitude: -38.5270
-                  })}
-                  className="text-xs p-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
+                  onClick={() => {
+                    setSimulationForm({
+                      diameter_m: 1000,
+                      velocity_kms: 90,
+                      impact_angle_deg: 5,
+                      target_type: 'rocha',
+                      latitude: -3.7327,
+                      longitude: -38.5270
+                    });
+                  }}
+                  className="text-xs p-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-all duration-150 ease-in-out transform hover:scale-105 preset-button"
                 >
                   Catastrófico
                 </button>
@@ -627,14 +681,32 @@ function AsteroidDashboard() {
               <button
                 onClick={runSimulation}
                 disabled={loading}
-                className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
+                className={`w-full py-3 px-4 rounded-lg font-medium transition-all duration-200 ease-in-out simulation-button ${
                   loading 
-                    ? 'bg-gray-500 cursor-not-allowed' 
-                    : 'bg-blue-600 hover:bg-blue-700'
-                } text-white`}
+                    ? 'bg-gray-500 cursor-not-allowed opacity-75' 
+                    : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg transform hover:scale-105'
+                } text-white flex items-center justify-center space-x-2`}
               >
-                {loading ? '🔄 Simulando...' : '🚀 Executar Simulação'}
+                {loading ? (
+                  <>
+                    <div className="spinner h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    <span>Simulando...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>🚀</span>
+                    <span>Executar Simulação</span>
+                  </>
+                )}
               </button>
+              
+              {loading && (
+                <div className="mt-2 text-center">
+                  <p className="text-xs text-gray-500 animate-pulse">
+                    Aguarde... Processando dados do impacto
+                  </p>
+                    </div>
+              )}
             </div>
 
             {/* Status da Simulação */}
@@ -652,8 +724,8 @@ function AsteroidDashboard() {
             {/* Informações de Atualização */}
             <div className="mt-4 text-xs opacity-60">
               Última atualização: {lastUpdate.toLocaleTimeString()}
-            </div>
-          </div>
+                  </div>
+                </div>
         </aside>
 
         {/* Área Principal */}
@@ -669,7 +741,7 @@ function AsteroidDashboard() {
               } rounded-lg shadow-lg p-2`}>
                 <button
                   onClick={() => setIsFullscreen(!isFullscreen)}
-                  className={`p-2 rounded transition-colors ${
+                  className={`p-2 rounded transition-colors duration-200 will-change-auto ${
                     darkMode 
                       ? 'hover:bg-gray-700' 
                       : 'hover:bg-gray-100'
@@ -678,10 +750,19 @@ function AsteroidDashboard() {
                   {isFullscreen ? '🔽' : '🔼'}
                 </button>
               </div>
-
-              <MapContainer
+              
+                  <MapContainer
                 center={center}
                 zoom={8}
+                minZoom={3}
+                maxZoom={18}
+                zoomControl={true}
+                scrollWheelZoom={true}
+                doubleClickZoom={true}
+                touchZoom={true}
+                boxZoom={true}
+                keyboard={true}
+                dragging={true}
                 style={{ 
                   height: '100%', 
                   width: '100%',
@@ -693,27 +774,27 @@ function AsteroidDashboard() {
               >
                 <MapController isFullscreen={isFullscreen} simulationData={simulationData} />
                 
-                <TileLayer
+                    <TileLayer
                   url={darkMode 
                     ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                     : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   }
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                />
-                
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    />
+                    
                 {/* Marcador Central */}
                 <Marker position={center}>
-                  <Popup>
+                      <Popup>
                     <div className="text-center">
                       <h3 className="font-bold text-red-600">Ponto de Impacto</h3>
                       <p className="text-sm">Coordenadas: {center[0].toFixed(4)}, {center[1].toFixed(4)}</p>
                     </div>
-                  </Popup>
-                </Marker>
-                
+                      </Popup>
+                    </Marker>
+                    
                 {/* Zonas de Perigo */}
                 {dangerZones.map((zone, index) => (
-                  <Circle
+                    <Circle
                     key={index}
                     center={center}
                     radius={zone.radius * 1000}
@@ -727,7 +808,7 @@ function AsteroidDashboard() {
                 
                 {/* Zonas Seguras */}
                 {safeZones.map(zone => (
-                  <Circle
+                    <Circle
                     key={zone.id}
                     center={zone.position}
                     radius={5000}
@@ -743,7 +824,7 @@ function AsteroidDashboard() {
                 {shelters.map(shelter => (
                   <Marker key={shelter.id} position={shelter.position}>
                     <Popup>
-                      <div className="text-center">
+                    <div className="text-center">
                         <h3 className="font-bold text-green-600">🏠 {shelter.name}</h3>
                         <p className="text-sm">Capacidade: {shelter.capacity.toLocaleString()} pessoas</p>
                         <p className="text-sm">Distância: {shelter.distance.toFixed(1)} km</p>
@@ -762,7 +843,7 @@ function AsteroidDashboard() {
                 ))}
               </MapContainer>
             </div>
-          </div>
+            </div>
 
           {/* Painel de Alertas - Responsivo */}
           <aside className={`w-full lg:w-80 border-l transition-colors duration-300 ${
@@ -801,7 +882,7 @@ function AsteroidDashboard() {
                               : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100'
                           }`}>
                             {alert.severity.toUpperCase()}
-                          </div>
+                      </div>
                           <span className="text-xs opacity-60">
                             {alert.timestamp.toLocaleTimeString()}
                           </span>
@@ -810,8 +891,8 @@ function AsteroidDashboard() {
                         <p className="text-xs opacity-60">{alert.location}</p>
                       </div>
                     ))
-                  )}
-                </div>
+              )}
+              </div>
               </div>
             </div>
           </aside>

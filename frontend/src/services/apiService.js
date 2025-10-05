@@ -2,24 +2,30 @@
 class CosmosSentinelAPI {
   constructor() {
     this.baseURL = 'http://localhost:8000/api/v1';
-    this.timeout = 30000; // 30 segundos
+    this.timeout = 10000; // 10 segundos (reduzido de 30)
   }
 
   // Método genérico para fazer requisições
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
+    
+    // Criar AbortController para timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    
     const config = {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      timeout: this.timeout,
+      signal: controller.signal,
       ...options,
     };
 
     try {
       const response = await fetch(url, config);
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -28,7 +34,17 @@ class CosmosSentinelAPI {
       const data = await response.json();
       return { success: true, data };
     } catch (error) {
+      clearTimeout(timeoutId);
       console.error(`API Error [${endpoint}]:`, error);
+      
+      if (error.name === 'AbortError') {
+        return { 
+          success: false, 
+          error: 'Timeout: A requisição demorou muito para responder',
+          data: null 
+        };
+      }
+      
       return { 
         success: false, 
         error: error.message,
