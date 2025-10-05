@@ -112,6 +112,55 @@ class CosmosSentinelAPI {
     return this.request(`/evacuacao/pontos?${params}`);
   }
 
+  // ===== IA DE TRÁFEGO E ROTAS =====
+  async setDemandMatrix(demandData) {
+    return this.request('/traffic-ai/demand', {
+      method: 'POST',
+      body: JSON.stringify(demandData),
+    });
+  }
+
+  async executeTrafficAssignment(assignmentData) {
+    return this.request('/traffic-ai/assign', {
+      method: 'POST',
+      body: JSON.stringify(assignmentData),
+    });
+  }
+
+  async getEvacuationRoutes(kRoutes = 3) {
+    return this.request(`/traffic-ai/routes?k=${kRoutes}`);
+  }
+
+  async predictTravelTime(predictionData) {
+    return this.request('/traffic-ai/ml/predict', {
+      method: 'POST',
+      body: JSON.stringify(predictionData),
+    });
+  }
+
+  async loadRoadNetwork(centerLat, centerLon, radiusKm = 10) {
+    return this.request(`/traffic-ai/network/load?lat=${centerLat}&lon=${centerLon}&radius=${radiusKm}`);
+  }
+
+  async getTrafficStatus() {
+    return this.request('/traffic-ai/status');
+  }
+
+  // ===== ANÁLISE INTEGRADA DE EVACUAÇÃO =====
+  async runIntegratedEvacuationAnalysis(scenarioData) {
+    return this.request('/integrated-evacuation/analyze', {
+      method: 'POST',
+      body: JSON.stringify(scenarioData),
+    });
+  }
+
+  async updateEvacuationScenario(scenarioId, updateData) {
+    return this.request(`/integrated-evacuation/update-scenario`, {
+      method: 'POST',
+      body: JSON.stringify({ scenario_id: scenarioId, ...updateData }),
+    });
+  }
+
   // ===== DADOS AMBIENTAIS =====
   async getEnvironmentalAnalysis(analysisRequest) {
     return this.request('/ambiental/comprehensive-analysis', {

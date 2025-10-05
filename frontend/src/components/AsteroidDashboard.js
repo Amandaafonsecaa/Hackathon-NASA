@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline, useMap } from
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { cosmosAPI } from '../services/apiService';
+import AIRouteOptimizer from './AIRouteOptimizer';
 
 // Ícones do Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -62,6 +63,7 @@ function AsteroidDashboard() {
   const [simulationData, setSimulationData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [aiOptimizedRoutes, setAiOptimizedRoutes] = useState([]);
   
   // Estados de filtros
   const [severityFilter, setSeverityFilter] = useState('all');
@@ -186,7 +188,7 @@ function AsteroidDashboard() {
         id: `${baseId}_impact`,
         type: 'impact',
         severity: 'critical',
-        message: `Impacto detectado: ${data.impact_energy_mt} MT`,
+        message: `Impacto detectado: ${data.impact_energy_mt.toFixed(2)} MT`,
         timestamp: new Date(),
         location: 'Centro da cidade'
       },
@@ -194,7 +196,7 @@ function AsteroidDashboard() {
         id: `${baseId}_evacuation`,
         type: 'evacuation',
         severity: 'high',
-        message: `Evacuação iniciada para zona de ${data.fireball_radius_km} km`,
+        message: `Evacuação iniciada para zona de ${data.fireball_radius_km.toFixed(2)} km`,
         timestamp: new Date(),
         location: 'Todas as zonas afetadas'
       },
@@ -202,7 +204,7 @@ function AsteroidDashboard() {
         id: `${baseId}_seismic`,
         type: 'seismic',
         severity: 'medium',
-        message: `Terremoto magnitude ${data.seismic_magnitude} detectado`,
+        message: `Terremoto magnitude ${data.seismic_magnitude.toFixed(1)} detectado`,
         timestamp: new Date(),
         location: 'Região metropolitana'
       }
@@ -297,6 +299,12 @@ function AsteroidDashboard() {
       setIsSimulating(false);
     }
   }, [simulationForm, generateZonesAndRoutes, generateAlerts, isSimulating, loading]);
+
+  // Função para atualizar rotas otimizadas por IA
+  const handleAIRoutesUpdate = useCallback((routes) => {
+    console.log('🧠 Rotas otimizadas por IA recebidas:', routes);
+    setAiOptimizedRoutes(routes);
+  }, []);
 
   // Atualização automática apenas do status da API
   useEffect(() => {
@@ -714,10 +722,20 @@ function AsteroidDashboard() {
               <div className="mt-6 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20">
                 <h3 className="font-medium mb-2">Última Simulação</h3>
                 <div className="text-sm space-y-1">
-                  <div>Energia: {simulationData.impact_energy_mt} MT</div>
+                  <div>Energia: {simulationData.impact_energy_mt.toFixed(2)} MT</div>
                   <div>Tipo: {simulationData.impact_type}</div>
-                  <div>Raio: {simulationData.fireball_radius_km} km</div>
+                  <div>Raio: {simulationData.fireball_radius_km.toFixed(2)} km</div>
                 </div>
+              </div>
+            )}
+
+            {/* IA de Otimização de Rotas */}
+            {simulationData && (
+              <div className="mt-6">
+                <AIRouteOptimizer 
+                  simulationData={simulationData}
+                  onRoutesUpdate={handleAIRoutesUpdate}
+                />
               </div>
             )}
 
@@ -840,6 +858,38 @@ function AsteroidDashboard() {
                     positions={[route.from, route.to]}
                     pathOptions={{ color: 'blue', weight: 3, opacity: 0.7 }}
                   />
+                ))}
+                
+                {/* Rotas Otimizadas por IA */}
+                {aiOptimizedRoutes.map(route => (
+                  <Polyline
+                    key={`ai_${route.id}`}
+                    positions={[route.from, route.to]}
+                    pathOptions={{ 
+                      color: route.color || '#8B5CF6', 
+                      weight: 4, 
+                      opacity: 0.8,
+                      dashArray: '10, 5'
+                    }}
+                  />
+                ))}
+                
+                {/* Marcadores para rotas de IA */}
+                {aiOptimizedRoutes.map(route => (
+                  <Marker key={`ai_marker_${route.id}`} position={route.to}>
+                    <Popup>
+                      <div className="text-center">
+                        <h3 className="font-bold text-purple-600">🧠 {route.name}</h3>
+                        <p className="text-sm">Distância: {route.distance?.toFixed(1)} km</p>
+                        <p className="text-sm">Tempo: {route.estimatedTime} min</p>
+                        <p className="text-sm">Capacidade: {route.capacity?.toLocaleString()} pessoas</p>
+                        <p className="text-sm">Eficiência: {route.efficiency}%</p>
+                        <div className="mt-2 text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                          Otimizado por IA
+                        </div>
+                      </div>
+                    </Popup>
+                  </Marker>
                 ))}
               </MapContainer>
             </div>
