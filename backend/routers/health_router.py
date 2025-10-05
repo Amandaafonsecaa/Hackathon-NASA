@@ -1,234 +1,288 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
-from typing import Dict, List, Optional
-from services import health_monitoring_service, air_quality_service, atmospheric_service
+from typing import Dict, List, Optional, Tuple
+from services import health_infrastructure_service
 
 router = APIRouter()
 
-class HealthMonitoringRequest(BaseModel):
-    impact_latitude: float = Field(..., description="Latitude do ponto de impacto")
-    impact_longitude: float = Field(..., description="Longitude do ponto de impacto")
-    diameter_m: float = Field(..., description="Diâmetro do asteroide em metros")
-    velocity_kms: float = Field(..., description="Velocidade do asteroide em km/s")
-    impact_angle_deg: float = Field(default=45, description="Ângulo de impacto em graus")
-    target_type: str = Field(default="rocha", description="Tipo de terreno (solo, rocha, oceano)")
-    wind_speed_ms: float = Field(default=10, description="Velocidade do vento em m/s")
-    wind_direction_deg: float = Field(default=0, description="Direção do vento em graus")
-    time_since_impact_hours: float = Field(default=0, description="Tempo desde o impacto em horas")
+class HealthCapacityRequest(BaseModel):
+    lat: float = Field(..., description="Latitude do centro da análise")
+    lon: float = Field(..., description="Longitude do centro da análise")
+    radius_km: float = Field(default=50, description="Raio da região em km")
 
-@router.post("/monitor-post-impact", summary="Monitorar condições de saúde pós-impacto")
-def monitor_post_impact_health(request: HealthMonitoringRequest) -> Dict:
+class HealthFacilitiesMapRequest(BaseModel):
+    bbox: Tuple[float, float, float, float] = Field(..., description="Bounding box (min_lon, min_lat, max_lon, max_lat)")
+
+@router.post("/capacity-analysis", summary="Análise de capacidade de infraestrutura de saúde")
+def get_health_capacity_analysis(request: HealthCapacityRequest) -> Dict:
     """
-    Monitora condições de saúde pós-impacto de asteroide.
+    Obtém análise completa de capacidade de infraestrutura de saúde.
     
-    Analisa:
-    - Impacto na qualidade do ar
-    - Riscos à saúde por grupo populacional
-    - Alertas de saúde
-    - Recomendações de saúde
-    - População afetada
+    Inclui:
+    - Capacidade hospitalar atual
+    - Ocupação de leitos
+    - Equipamentos disponíveis
+    - Capacidade para emergências
+    - Avaliação de vulnerabilidade
+    - Recomendações de mitigação
     """
     try:
-        # Executar simulação de impacto
-        from services import physics_service
-        impact_data = physics_service.calculate_all_impact_effects(
-            diameter_m=request.diameter_m,
-            velocity_kms=request.velocity_kms,
-            impact_angle_deg=request.impact_angle_deg,
-            tipo_terreno=request.target_type,
-            wind_speed_ms=request.wind_speed_ms,
-            wind_direction_deg=request.wind_direction_deg
+        capacity_analysis = health_infrastructure_service.get_health_capacity_by_region(
+            lat=request.lat,
+            lon=request.lon,
+            radius_km=request.radius_km
         )
         
-        # Obter dados de qualidade do ar
-        air_quality_data = air_quality_service.get_airnow_data(
-            request.impact_latitude, 
-            request.impact_longitude
+        return capacity_analysis
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro na análise de capacidade de saúde: {str(e)}")
+
+@router.get("/capacity-analysis", summary="Análise de capacidade de infraestrutura de saúde (GET)")
+def get_health_capacity_analysis_get(
+    lat: float = Query(..., description="Latitude do centro da análise"),
+    lon: float = Query(..., description="Longitude do centro da análise"),
+    radius_km: float = Query(default=50, description="Raio da região em km")
+) -> Dict:
+    """
+    Obtém análise completa de capacidade de infraestrutura de saúde.
+    """
+    try:
+        capacity_analysis = health_infrastructure_service.get_health_capacity_by_region(
+            lat=lat,
+            lon=lon,
+            radius_km=radius_km
         )
         
-        # Executar monitoramento de saúde
-        health_monitoring = health_monitoring_service.monitor_post_impact_health(
-            impact_coordinates=(request.impact_latitude, request.impact_longitude),
-            impact_data=impact_data,
-            air_quality_data=air_quality_data.get("data", {}),
-            time_since_impact_hours=request.time_since_impact_hours
+        return capacity_analysis
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro na análise de capacidade de saúde: {str(e)}")
+
+@router.post("/facilities-map", summary="Mapa de instalações de saúde")
+def get_health_facilities_map(request: HealthFacilitiesMapRequest) -> Dict:
+    """
+    Gera mapa de instalações de saúde para uma área específica.
+    
+    Inclui:
+    - Hospitais e suas capacidades
+    - Clínicas e especialidades
+    - Farmácias e medicamentos de emergência
+    - Estatísticas de distribuição
+    """
+    try:
+        facilities_map = health_infrastructure_service.get_health_facilities_map(
+            bbox=request.bbox
         )
         
-        return health_monitoring
+        return facilities_map
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro no monitoramento de saúde: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar mapa de instalações: {str(e)}")
 
-@router.get("/air-quality/current", summary="Obter qualidade do ar atual")
-def get_current_air_quality(
-    latitude: float = Query(..., description="Latitude"),
-    longitude: float = Query(..., description="Longitude"),
-    date: str = Query(default=None, description="Data no formato YYYY-MM-DD")
+@router.get("/facilities-map", summary="Mapa de instalações de saúde (GET)")
+def get_health_facilities_map_get(
+    min_lon: float = Query(..., description="Longitude mínima"),
+    min_lat: float = Query(..., description="Latitude mínima"),
+    max_lon: float = Query(..., description="Longitude máxima"),
+    max_lat: float = Query(..., description="Latitude máxima")
 ) -> Dict:
     """
-    Obtém dados de qualidade do ar atual para uma localização.
+    Gera mapa de instalações de saúde para uma área específica.
     """
     try:
-        air_quality_data = air_quality_service.get_airnow_data(latitude, longitude, date)
-        return air_quality_data
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao obter qualidade do ar: {str(e)}")
-
-@router.get("/air-quality/validate", summary="Validar dados de qualidade do ar")
-def validate_air_quality_data(
-    latitude: float = Query(..., description="Latitude"),
-    longitude: float = Query(..., description="Longitude"),
-    date: str = Query(default=None, description="Data no formato YYYY-MM-DD")
-) -> Dict:
-    """
-    Valida dados de qualidade do ar comparando múltiplas fontes.
-    """
-    try:
-        validation_result = air_quality_service.validate_air_quality_data(latitude, longitude, date)
-        return validation_result
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro na validação de dados: {str(e)}")
-
-@router.get("/atmospheric/conditions", summary="Obter condições atmosféricas")
-def get_atmospheric_conditions(
-    latitude: float = Query(..., description="Latitude"),
-    longitude: float = Query(..., description="Longitude"),
-    date: str = Query(default=None, description="Data no formato YYYY-MM-DD")
-) -> Dict:
-    """
-    Obtém condições atmosféricas (vento, temperatura, pressão) para uma localização.
-    """
-    try:
-        atmospheric_data = atmospheric_service.get_merra2_data(latitude, longitude, date)
-        return atmospheric_data
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao obter condições atmosféricas: {str(e)}")
-
-@router.get("/atmospheric/precipitation", summary="Obter dados de precipitação")
-def get_precipitation_data(
-    latitude: float = Query(..., description="Latitude"),
-    longitude: float = Query(..., description="Longitude"),
-    date: str = Query(default=None, description="Data no formato YYYY-MM-DD")
-) -> Dict:
-    """
-    Obtém dados de precipitação para uma localização.
-    """
-    try:
-        precipitation_data = atmospheric_service.get_gpm_precipitation(latitude, longitude, date)
-        return precipitation_data
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao obter dados de precipitação: {str(e)}")
-
-@router.get("/atmospheric/dispersion", summary="Analisar condições de dispersão atmosférica")
-def analyze_dispersion_conditions(
-    latitude: float = Query(..., description="Latitude"),
-    longitude: float = Query(..., description="Longitude"),
-    date: str = Query(default=None, description="Data no formato YYYY-MM-DD")
-) -> Dict:
-    """
-    Analisa condições atmosféricas para modelagem de dispersão de poluentes.
-    """
-    try:
-        dispersion_analysis = atmospheric_service.get_atmospheric_dispersion_conditions(
-            latitude, longitude, date
+        bbox = (min_lon, min_lat, max_lon, max_lat)
+        facilities_map = health_infrastructure_service.get_health_facilities_map(
+            bbox=bbox
         )
-        return dispersion_analysis
+        
+        return facilities_map
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro na análise de dispersão: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar mapa de instalações: {str(e)}")
 
-@router.get("/health-thresholds", summary="Obter limiares de saúde")
-def get_health_thresholds() -> Dict:
+@router.get("/emergency-response-time", summary="Tempo de resposta de emergência")
+def get_emergency_response_time(
+    lat: float = Query(..., description="Latitude"),
+    lon: float = Query(..., description="Longitude"),
+    emergency_type: str = Query(default="medical", description="Tipo de emergência (medical, fire, police)")
+) -> Dict:
     """
-    Retorna limiares de saúde para diferentes poluentes.
+    Calcula tempo de resposta de emergência para uma localização.
+    
+    Considera:
+    - Fatores de localização
+    - Tráfego e condições de estrada
+    - Disponibilidade de recursos
+    - Nível de resposta
     """
     try:
-        thresholds = health_monitoring_service.health_thresholds
-        sensitive_groups = health_monitoring_service.sensitive_groups
+        response_time = health_infrastructure_service.get_emergency_response_time(
+            lat=lat,
+            lon=lon,
+            emergency_type=emergency_type
+        )
+        
+        return response_time
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao calcular tempo de resposta: {str(e)}")
+
+@router.get("/hospital-capacity", summary="Capacidade hospitalar em tempo real")
+def get_hospital_capacity(
+    lat: float = Query(..., description="Latitude do centro"),
+    lon: float = Query(..., description="Longitude do centro"),
+    radius_km: float = Query(default=50, description="Raio da região em km")
+) -> Dict:
+    """
+    Obtém capacidade hospitalar em tempo real.
+    
+    Inclui:
+    - Leitos disponíveis
+    - Ocupação atual
+    - Leitos de UTI
+    - Ventiladores disponíveis
+    - Salas de cirurgia
+    - Ambulâncias
+    """
+    try:
+        capacity_data = health_infrastructure_service.get_health_capacity_by_region(
+            lat=lat,
+            lon=lon,
+            radius_km=radius_km
+        )
+        
+        if not capacity_data.get("success"):
+            return capacity_data
+        
+        # Extrair dados específicos de capacidade hospitalar
+        hospital_data = capacity_data.get("health_infrastructure", {}).get("hospitals", {})
+        current_occupancy = capacity_data.get("current_occupancy", {}).get("hospitals", {})
+        emergency_capacity = capacity_data.get("emergency_capacity", {})
         
         return {
             "success": True,
-            "health_thresholds": thresholds,
-            "sensitive_groups": sensitive_groups,
-            "description": "Limiares baseados em padrões internacionais de qualidade do ar"
+            "coordinates": {"lat": lat, "lon": lon},
+            "radius_km": radius_km,
+            "hospital_capacity": {
+                "total_hospitals": hospital_data.get("count", 0),
+                "total_beds": hospital_data.get("total_beds", 0),
+                "available_beds": current_occupancy.get("available_beds", 0),
+                "occupied_beds": current_occupancy.get("occupied_beds", 0),
+                "occupancy_rate": current_occupancy.get("bed_occupancy_rate", 0),
+                "icu_beds": {
+                    "total": hospital_data.get("icu_beds", 0),
+                    "available": emergency_capacity.get("hospitalization", {}).get("icu_beds_available", 0),
+                    "occupancy_rate": current_occupancy.get("icu_occupancy_rate", 0)
+                },
+                "emergency_beds": {
+                    "total": hospital_data.get("emergency_beds", 0),
+                    "available": emergency_capacity.get("immediate_care", {}).get("emergency_beds_available", 0),
+                    "occupancy_rate": current_occupancy.get("emergency_occupancy_rate", 0)
+                },
+                "ventilators": {
+                    "total": hospital_data.get("ventilators", 0),
+                    "available": emergency_capacity.get("hospitalization", {}).get("ventilators_available", 0)
+                },
+                "surgery_rooms": hospital_data.get("surgery_rooms", 0),
+                "ambulances": {
+                    "total": hospital_data.get("ambulances", 0),
+                    "available": emergency_capacity.get("immediate_care", {}).get("ambulances_available", 0)
+                }
+            },
+            "capacity_assessment": emergency_capacity.get("overall_capacity_assessment", {}),
+            "timestamp": capacity_data.get("data_timestamp")
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao obter limiares de saúde: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao obter capacidade hospitalar: {str(e)}")
 
-@router.get("/health-alerts/types", summary="Listar tipos de alertas de saúde")
-def get_health_alert_types() -> Dict:
-    """
-    Retorna informações sobre os tipos de alertas de saúde disponíveis.
-    """
-    alert_types = {
-        "EMERGENCY": {
-            "name": "Alerta de Emergência",
-            "priority": "HIGH",
-            "description": "Condições perigosas que requerem ação imediata",
-            "trigger_conditions": ["AQI > 200", "Poluentes críticos", "Exposição prolongada"]
-        },
-        "SENSITIVE_GROUPS": {
-            "name": "Alerta para Grupos Sensíveis",
-            "priority": "MEDIUM",
-            "description": "Alertas específicos para grupos vulneráveis",
-            "trigger_conditions": ["AQI > 150", "Poluentes moderados", "Grupos de risco"]
-        },
-        "IMMEDIATE_POST_IMPACT": {
-            "name": "Período Crítico Pós-Impacto",
-            "priority": "HIGH",
-            "description": "Primeiras horas após o impacto são críticas",
-            "trigger_conditions": ["< 6 horas pós-impacto", "Concentração máxima de poluentes"]
-        }
-    }
-    
-    return {
-        "success": True,
-        "total_alert_types": len(alert_types),
-        "alert_types": alert_types
-    }
-
-@router.post("/health-recommendations", summary="Gerar recomendações de saúde")
-def generate_health_recommendations(
-    aqi_level: float = Query(..., description="Nível de AQI"),
-    population_type: str = Query(default="general", description="Tipo de população (general, sensitive)"),
-    time_exposed_hours: float = Query(default=1, description="Tempo de exposição em horas")
+@router.get("/medical-evacuation-capacity", summary="Capacidade de evacuação médica")
+def get_medical_evacuation_capacity(
+    lat: float = Query(..., description="Latitude do centro"),
+    lon: float = Query(..., description="Longitude do centro"),
+    radius_km: float = Query(default=50, description="Raio da região em km")
 ) -> Dict:
     """
-    Gera recomendações de saúde baseadas em níveis de poluição e exposição.
+    Obtém capacidade de evacuação médica para emergências.
+    
+    Inclui:
+    - Capacidade de evacuação médica
+    - Cuidados críticos disponíveis
+    - Equipamentos especializados
+    - Tempo de resposta
+    - Recomendações
     """
     try:
-        # Simular dados de poluentes baseados no AQI
-        pollutants = {
-            "PM2_5": {"value": aqi_level * 0.35, "unit": "μg/m³"},
-            "PM10": {"value": aqi_level * 0.5, "unit": "μg/m³"},
-            "NO2": {"value": aqi_level * 0.2, "unit": "ppb"},
-            "O3": {"value": aqi_level * 0.7, "unit": "ppb"}
-        }
-        
-        # Calcular AQI
-        new_aqi = {"value": aqi_level, "category": "Unknown"}
-        
-        # Avaliar riscos
-        health_risks = health_monitoring_service._assess_health_risks({"new_aqi": new_aqi})
-        
-        # Gerar recomendações
-        health_recommendations = health_monitoring_service._generate_health_recommendations(
-            health_risks, {}, time_exposed_hours
+        capacity_data = health_infrastructure_service.get_health_capacity_by_region(
+            lat=lat,
+            lon=lon,
+            radius_km=radius_km
         )
+        
+        if not capacity_data.get("success"):
+            return capacity_data
+        
+        # Extrair dados de evacuação médica
+        evacuation_capacity = capacity_data.get("emergency_capacity", {}).get("evacuation_medical", {})
+        vulnerability_assessment = capacity_data.get("vulnerability_assessment", {})
         
         return {
             "success": True,
-            "aqi_level": aqi_level,
-            "population_type": population_type,
-            "time_exposed_hours": time_exposed_hours,
-            "health_risks": health_risks,
-            "recommendations": health_recommendations
+            "coordinates": {"lat": lat, "lon": lon},
+            "radius_km": radius_km,
+            "medical_evacuation_capacity": evacuation_capacity,
+            "vulnerability_assessment": vulnerability_assessment,
+            "recommendations": capacity_data.get("emergency_capacity", {}).get("overall_capacity_assessment", {}).get("recommendations", []),
+            "timestamp": capacity_data.get("data_timestamp")
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao gerar recomendações: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao obter capacidade de evacuação médica: {str(e)}")
+
+@router.get("/health-statistics", summary="Estatísticas de saúde globais")
+def get_health_statistics() -> Dict:
+    """
+    Obtém estatísticas globais de infraestrutura de saúde.
+    
+    Inclui padrões de:
+    - Capacidade hospitalar por região
+    - Distribuição de especialidades
+    - Equipamentos médicos
+    - Tempos de resposta
+    """
+    try:
+        # Obter dados simulados
+        health_data = health_infrastructure_service.simulated_health_data
+        
+        global_stats = {
+            "hospital_capacity": {
+                "global_beds_per_1000": health_data["hospitals"]["capacity_per_1000"],
+                "specialties_available": health_data["hospitals"]["specialties"],
+                "equipment_per_hospital": health_data["hospitals"]["equipment_per_hospital"]
+            },
+            "clinic_capacity": {
+                "global_capacity_per_1000": health_data["clinics"]["capacity_per_1000"],
+                "clinic_types": health_data["clinics"]["types"]
+            },
+            "emergency_services": {
+                "global_response_time_minutes": health_data["emergency_services"]["response_time_minutes"],
+                "ambulances_per_100k": health_data["emergency_services"]["ambulances_per_100k"],
+                "paramedics_per_100k": health_data["emergency_services"]["paramedics_per_100k"]
+            },
+            "pharmaceutical": {
+                "pharmacies_per_1000": health_data["pharmaceutical"]["pharmacies_per_1000"],
+                "emergency_medications": health_data["pharmaceutical"]["emergency_medications"]
+            }
+        }
+        
+        return {
+            "success": True,
+            "global_health_statistics": global_stats,
+            "data_source": "Simulated Global Health Infrastructure",
+            "note": "Dados simulados para demonstração. Em produção, usar dados reais de saúde pública.",
+            "generated_at": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao obter estatísticas de saúde: {str(e)}")
