@@ -381,3 +381,4 @@ def generate_evacuation_points_grid(
                 })
     
     return evacuation_points
+

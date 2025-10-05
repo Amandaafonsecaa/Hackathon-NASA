@@ -26,3 +26,7 @@ httpx
 python-multipart
 jinja2
 PyYAML
+torch
+torchvision
+websockets
+joblib
