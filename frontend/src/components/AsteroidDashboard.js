@@ -74,6 +74,16 @@ function AsteroidDashboard() {
   const [zoneFilter, setZoneFilter] = useState('all');
   const [timeFilter, setTimeFilter] = useState('24h');
   
+  // Estados do formulário de simulação
+  const [simulationForm, setSimulationForm] = useState({
+    diameter_m: 100,
+    velocity_kms: 35,
+    impact_angle_deg: 24,
+    target_type: 'rocha',
+    latitude: -3.7327,
+    longitude: -38.5270
+  });
+  
   // Estados de alertas
   const [alerts, setAlerts] = useState([]);
   
@@ -84,7 +94,12 @@ function AsteroidDashboard() {
   const [shelters, setShelters] = useState([]);
 
   // Coordenadas padrão
-  const [center] = useState([-3.7327, -38.5270]);
+  const [center, setCenter] = useState([-3.7327, -38.5270]);
+
+  // Atualizar centro quando coordenadas mudarem
+  useEffect(() => {
+    setCenter([simulationForm.latitude, simulationForm.longitude]);
+  }, [simulationForm.latitude, simulationForm.longitude]);
 
   // Verificar status da API
   const checkApiStatus = useCallback(async () => {
@@ -203,12 +218,12 @@ function AsteroidDashboard() {
     setLoading(true);
     try {
       const result = await cosmosAPI.simulateImpact({
-        diameter_m: 100,
-        velocity_kms: 35,
-        impact_angle_deg: 24,
-        target_type: 'rocha',
-        latitude: center[0],
-        longitude: center[1]
+        diameter_m: simulationForm.diameter_m,
+        velocity_kms: simulationForm.velocity_kms,
+        impact_angle_deg: simulationForm.impact_angle_deg,
+        target_type: simulationForm.target_type,
+        latitude: simulationForm.latitude,
+        longitude: simulationForm.longitude
       });
 
       if (result.success && result.data) {
@@ -233,7 +248,7 @@ function AsteroidDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [center, generateZonesAndRoutes, generateAlerts]);
+  }, [simulationForm, generateZonesAndRoutes, generateAlerts]);
 
   // Atualização automática
   useEffect(() => {
@@ -331,8 +346,168 @@ function AsteroidDashboard() {
           <div className="p-6 h-full flex flex-col overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200 dark:scrollbar-thumb-gray-600 dark:scrollbar-track-gray-800">
             <h2 className="text-lg font-semibold mb-6">Filtros e Controles</h2>
             
+            {/* Formulário de Simulação */}
+            <div className="space-y-4 flex-1">
+              <h3 className="text-md font-semibold text-blue-400">Parâmetros do Meteoro</h3>
+              
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Diâmetro (metros)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10000"
+                  step="1"
+                  value={simulationForm.diameter_m}
+                  onChange={(e) => setSimulationForm(prev => ({
+                    ...prev,
+                    diameter_m: parseFloat(e.target.value) || 0
+                  }))}
+                  className={`w-full p-3 rounded-lg border transition-colors ${
+                    darkMode 
+                      ? 'bg-gray-700 border-gray-600 text-white' 
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                  placeholder="Ex: 100"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Tamanho do meteoro em metros
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Velocidade (km/s)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  step="0.1"
+                  value={simulationForm.velocity_kms}
+                  onChange={(e) => setSimulationForm(prev => ({
+                    ...prev,
+                    velocity_kms: parseFloat(e.target.value) || 0
+                  }))}
+                  className={`w-full p-3 rounded-lg border transition-colors ${
+                    darkMode 
+                      ? 'bg-gray-700 border-gray-600 text-white' 
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                  placeholder="Ex: 35"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Velocidade de entrada na atmosfera
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Ângulo de Impacto (graus)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="90"
+                  step="1"
+                  value={simulationForm.impact_angle_deg}
+                  onChange={(e) => setSimulationForm(prev => ({
+                    ...prev,
+                    impact_angle_deg: parseFloat(e.target.value) || 0
+                  }))}
+                  className={`w-full p-3 rounded-lg border transition-colors ${
+                    darkMode 
+                      ? 'bg-gray-700 border-gray-600 text-white' 
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                  placeholder="Ex: 24"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  0° = perpendicular, 90° = rasante
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Tipo de Terreno
+                </label>
+                <select
+                  value={simulationForm.target_type}
+                  onChange={(e) => setSimulationForm(prev => ({
+                    ...prev,
+                    target_type: e.target.value
+                  }))}
+                  className={`w-full p-3 rounded-lg border transition-colors ${
+                    darkMode 
+                      ? 'bg-gray-700 border-gray-600 text-white' 
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                >
+                  <option value="solo">Solo</option>
+                  <option value="rocha">Rocha</option>
+                  <option value="oceano">Oceano</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Superfície de impacto
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Latitude
+                  </label>
+                  <input
+                    type="number"
+                    min="-90"
+                    max="90"
+                    step="0.0001"
+                    value={simulationForm.latitude}
+                    onChange={(e) => setSimulationForm(prev => ({
+                      ...prev,
+                      latitude: parseFloat(e.target.value) || 0
+                    }))}
+                    className={`w-full p-2 rounded-lg border transition-colors text-sm ${
+                      darkMode 
+                        ? 'bg-gray-700 border-gray-600 text-white' 
+                        : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                    placeholder="-3.7327"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Longitude
+                  </label>
+                  <input
+                    type="number"
+                    min="-180"
+                    max="180"
+                    step="0.0001"
+                    value={simulationForm.longitude}
+                    onChange={(e) => setSimulationForm(prev => ({
+                      ...prev,
+                      longitude: parseFloat(e.target.value) || 0
+                    }))}
+                    className={`w-full p-2 rounded-lg border transition-colors text-sm ${
+                      darkMode 
+                        ? 'bg-gray-700 border-gray-600 text-white' 
+                        : 'bg-white border-gray-300 text-gray-900'
+                    }`}
+                    placeholder="-38.5270"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">
+                Coordenadas do ponto de impacto
+              </p>
+            </div>
+
             {/* Filtros */}
-            <div className="space-y-6 flex-1">
+            <div className="space-y-4 mt-6">
+              <h3 className="text-md font-semibold text-green-400">Filtros de Visualização</h3>
+              
               <div>
                 <label className="block text-sm font-medium mb-2">Severidade</label>
                 <select
@@ -388,8 +563,67 @@ function AsteroidDashboard() {
               </div>
             </div>
 
+            {/* Botões de Preset */}
+            <div className="mt-4">
+              <h4 className="text-sm font-medium mb-2 text-purple-400">Presets Rápidos</h4>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setSimulationForm({
+                    diameter_m: 50,
+                    velocity_kms: 20,
+                    impact_angle_deg: 45,
+                    target_type: 'solo',
+                    latitude: -3.7327,
+                    longitude: -38.5270
+                  })}
+                  className="text-xs p-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors"
+                >
+                  Pequeno
+                </button>
+                <button
+                  onClick={() => setSimulationForm({
+                    diameter_m: 200,
+                    velocity_kms: 50,
+                    impact_angle_deg: 30,
+                    target_type: 'rocha',
+                    latitude: -3.7327,
+                    longitude: -38.5270
+                  })}
+                  className="text-xs p-2 bg-orange-600 hover:bg-orange-700 text-white rounded transition-colors"
+                >
+                  Médio
+                </button>
+                <button
+                  onClick={() => setSimulationForm({
+                    diameter_m: 500,
+                    velocity_kms: 70,
+                    impact_angle_deg: 15,
+                    target_type: 'oceano',
+                    latitude: -3.7327,
+                    longitude: -38.5270
+                  })}
+                  className="text-xs p-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                >
+                  Grande
+                </button>
+                <button
+                  onClick={() => setSimulationForm({
+                    diameter_m: 1000,
+                    velocity_kms: 90,
+                    impact_angle_deg: 5,
+                    target_type: 'rocha',
+                    latitude: -3.7327,
+                    longitude: -38.5270
+                  })}
+                  className="text-xs p-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
+                >
+                  Catastrófico
+                </button>
+              </div>
+            </div>
+
             {/* Botão de Simulação */}
-            <div className="mt-8">
+            <div className="mt-6">
               <button
                 onClick={runSimulation}
                 disabled={loading}
