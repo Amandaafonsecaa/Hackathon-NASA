@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+requests
+pydantic-settings
+numpy
+python-dotenv
+pandas
+scipy
+scikit-learn
+aiohttp
+httpx
+python-multipart
+jinja2
+PyYAML
+websockets
+joblib

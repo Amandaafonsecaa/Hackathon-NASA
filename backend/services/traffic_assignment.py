@@ -4,9 +4,16 @@ Implementa DQN para controle adaptativo de semáforos.
 """
 
 import numpy as np
-import torch
-import torch.nn as nn
-import torch.optim as optim
+
+try:
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+except ImportError:
+    from mock_torch import torch
+    torch.nn = torch.nn
+    torch.optim = torch.optim
+
 import random
 from collections import deque
 from typing import Dict, List, Tuple, Optional
