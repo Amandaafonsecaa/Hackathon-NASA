@@ -1,697 +1,588 @@
-import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
+import React, { useState, useEffect, useCallback } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Circle, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { cosmosAPI } from '../services/apiService';
 import 'leaflet/dist/leaflet.css';
+import { cosmosAPI } from '../services/apiService';
 
-// Configurar ícones do Leaflet
+// Ícones do Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
+  iconUrl: require('leaflet/dist/images/marker-icon.png'),
+  shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
 });
 
-const AsteroidDashboard = () => {
-  // Estados principais - Design Original IMPACTOR-2025
-  const [asteroidDiameter, setAsteroidDiameter] = useState(100); // metros
-  const [impactVelocity, setImpactVelocity] = useState(35); // km/s
-  const [impactAngle, setImpactAngle] = useState(24); // graus
-  const [latitude, setLatitude] = useState(-3.7327);
-  const [longitude, setLongitude] = useState(-38.5270);
-  const [mitigationStrategy, setMitigationStrategy] = useState('Nenhuma');
-  const [deflectionTime, setDeflectionTime] = useState(15); // dias
-  const [timeToImpact, setTimeToImpact] = useState(72); // horas
-  const [populationAtRisk, setPopulationAtRisk] = useState(2.5); // milhões
-  const [safeSimulationResults, setSimulationResults] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [backendConnected, setBackendConnected] = useState(false);
-  const [usingBackend, setUsingBackend] = useState(false);
-
-  // Testar conexão com backend
+// Componente para controlar o mapa
+function MapController({ isFullscreen, simulationData }) {
+  const map = useMap();
+  
   useEffect(() => {
-    const testBackendConnection = async () => {
-      try {
-        const result = await cosmosAPI.testConnection();
-        setBackendConnected(result.success);
-        } catch (error) {
-        setBackendConnected(false);
-      }
-    };
-    
-    testBackendConnection();
+    if (isFullscreen) {
+      map.invalidateSize();
+    }
+  }, [isFullscreen, map]);
+
+  useEffect(() => {
+    if (simulationData?.fireball_radius_km > 0) {
+      const radius = simulationData.fireball_radius_km * 1000;
+      const zoomLevel = Math.max(6, Math.min(12, Math.floor(15 - Math.log10(radius / 1000))));
+      map.setZoom(zoomLevel);
+    }
+  }, [simulationData, map]);
+
+  return null;
+}
+
+// Componente do relógio
+function Clock() {
+  const [time, setTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
   }, []);
 
-  // Função para executar simulação
-  const runSimulation = async () => {
-    setLoading(true);
-    
+  return (
+    <div className="text-sm font-mono text-white">
+      {time.toLocaleTimeString('pt-BR', { 
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })}
+    </div>
+  );
+}
+
+// Componente principal
+function AsteroidDashboard() {
+  // Estados principais
+  const [darkMode, setDarkMode] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [apiStatus, setApiStatus] = useState('connecting');
+  const [lastUpdate, setLastUpdate] = useState(new Date());
+  
+  // Estados de simulação
+  const [simulationData, setSimulationData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  
+  // Estados de filtros
+  const [severityFilter, setSeverityFilter] = useState('all');
+  const [zoneFilter, setZoneFilter] = useState('all');
+  const [timeFilter, setTimeFilter] = useState('24h');
+  
+  // Estados de alertas
+  const [alerts, setAlerts] = useState([]);
+  
+  // Estados de evacuação
+  const [safeZones, setSafeZones] = useState([]);
+  const [dangerZones, setDangerZones] = useState([]);
+  const [evacuationRoutes, setEvacuationRoutes] = useState([]);
+  const [shelters, setShelters] = useState([]);
+
+  // Coordenadas padrão
+  const [center] = useState([-3.7327, -38.5270]);
+
+  // Verificar status da API
+  const checkApiStatus = useCallback(async () => {
     try {
-      // Sempre tentar usar o backend primeiro
-      const simulationData = {
-        diameter_m: asteroidDiameter,
-        velocity_kms: impactVelocity,
-        impact_angle_deg: impactAngle,
-        target_type: 'rocha',
-        latitude: latitude,
-        longitude: longitude
-      };
-      
-      console.log('Enviando dados para simulação:', simulationData);
-      
-      const result = await cosmosAPI.simulateImpact(simulationData);
-      
-      console.log('Resultado da API:', result);
-      
-      if (result.success && result.data) {
-        console.log('Dados recebidos do backend:', result.data);
-        
-        // Mapear dados do backend para estrutura esperada pelo frontend
-        const backendData = result.data;
-        const mappedData = {
-          impact_energy_mt: backendData.energia?.equivalente_tnt_megatons || 0,
-          seismic_magnitude: backendData.terremoto?.magnitude_richter || 0,
-          crater_diameter_km: backendData.cratera?.diametro_final_km || 0,
-          fireball_radius_km: backendData.fireball?.raio_queimadura_3_grau_km || 0,
-          shockwave_intensity_db: backendData.onda_de_choque_e_vento?.nivel_som_1km_db || 0,
-          peak_winds_kmh: (backendData.onda_de_choque_e_vento?.pico_vento_ms || 0) * 3.6, // converter m/s para km/h
-          impact_type: backendData.cratera?.is_airburst ? 'AIRBURST' : 'IMPACTO DIRETO',
-          // Calcular vítimas baseado na energia
-          fireball_victims: Math.round((backendData.energia?.equivalente_tnt_megatons || 0) * 3000),
-          burn_victims: Math.round((backendData.energia?.equivalente_tnt_megatons || 0) * 8000),
-          shockwave_victims: Math.round((backendData.energia?.equivalente_tnt_megatons || 0) * 5000),
-          burned_trees: Math.round((backendData.energia?.equivalente_tnt_megatons || 0) * 1000),
-          collapsed_houses: Math.round((backendData.energia?.equivalente_tnt_megatons || 0) * 1500),
-          fallen_trees: Math.round((backendData.energia?.equivalente_tnt_megatons || 0) * 2000),
-          frequency: (backendData.energia?.equivalente_tnt_megatons || 0) > 20 ? '1 em 500 anos' : 
-                    (backendData.energia?.equivalente_tnt_megatons || 0) > 10 ? '1 em 1000 anos' : '1 em 2000 anos'
-        };
-        
-        console.log('Dados mapeados:', mappedData);
-        setSimulationResults(mappedData);
-        setUsingBackend(true);
-      } else {
-        console.log('Backend não respondeu, usando cálculo local baseado nos parâmetros');
-        // Cálculo local baseado nos parâmetros reais
-        const energy = Math.pow(asteroidDiameter / 100, 3) * Math.pow(impactVelocity / 20, 2) * 0.5;
-        
-        // Determinar tipo de impacto baseado no diâmetro (lógica científica correta)
-        const isAirburst = asteroidDiameter <= 150; // Asteroides <= 150m geralmente explodem na atmosfera
-        const impactType = isAirburst ? 'AIRBURST' : 'IMPACTO DIRETO';
-        
-        // Calcular cratera apenas para impactos diretos
-        const craterSize = isAirburst ? 0 : asteroidDiameter * 0.02; // 2% do diâmetro apenas para impactos diretos
-        const fireballRadius = asteroidDiameter * 0.01; // Raio da bola de fogo independente do tipo
-        
-        const results = {
-          impact_energy_mt: Math.round(energy * 10) / 10,
-          seismic_magnitude: Math.round((Math.log10(energy) + 4) * 10) / 10,
-          crater_diameter_km: Math.round(craterSize * 10) / 10,
-          fireball_radius_km: Math.round(fireballRadius * 10) / 10,
-          shockwave_intensity_db: Math.round(120 + (energy * 2)),
-          peak_winds_kmh: Math.round(200 + (energy * 10)),
-          impact_type: impactType,
-          fireball_victims: Math.round(energy * 3000),
-          burn_victims: Math.round(energy * 8000),
-          shockwave_victims: Math.round(energy * 5000),
-          burned_trees: Math.round(energy * 1000),
-          collapsed_houses: Math.round(energy * 1500),
-          fallen_trees: Math.round(energy * 2000),
-          frequency: energy > 20 ? '1 em 500 anos' : energy > 10 ? '1 em 1000 anos' : '1 em 2000 anos'
-        };
-        
-        setSimulationResults(results);
-        setUsingBackend(false);
+      const connected = await cosmosAPI.testConnection();
+      setApiStatus(connected ? 'online' : 'offline');
+    } catch (error) {
+      setApiStatus('offline');
+    }
+  }, []);
+
+  // Gerar zonas e rotas
+  const generateZonesAndRoutes = useCallback((data) => {
+    if (!data.fireball_radius_km) return;
+
+    const radius = data.fireball_radius_km;
+    
+    // Zonas de perigo por nível
+    const dangerLevels = [
+      { level: 'critical', radius: radius * 0.3, color: 'red', opacity: 0.8 },
+      { level: 'high', radius: radius * 0.6, color: 'orange', opacity: 0.6 },
+      { level: 'medium', radius: radius * 0.9, color: 'yellow', opacity: 0.4 }
+    ];
+
+    setDangerZones(dangerLevels);
+
+    // Zonas seguras
+    const safeRadius = radius * 2;
+    const safeZonesData = [
+      {
+        id: 1,
+        name: "Abrigo Norte",
+        position: [center[0] + (safeRadius / 111), center[1]],
+        capacity: 5000,
+        distance: safeRadius,
+        type: 'shelter'
+      },
+      {
+        id: 2,
+        name: "Abrigo Sul",
+        position: [center[0] - (safeRadius / 111), center[1]],
+        capacity: 3000,
+        distance: safeRadius,
+        type: 'shelter'
+      },
+      {
+        id: 3,
+        name: "Zona Segura Leste",
+        position: [center[0], center[1] + (safeRadius / 111)],
+        capacity: 8000,
+        distance: safeRadius,
+        type: 'safe_zone'
+      },
+      {
+        id: 4,
+        name: "Zona Segura Oeste",
+        position: [center[0], center[1] - (safeRadius / 111)],
+        capacity: 6000,
+        distance: safeRadius,
+        type: 'safe_zone'
       }
-      } catch (error) {
-      console.error('Erro ao executar simulação:', error);
-      
-      // Fallback com cálculo baseado nos parâmetros
-      const energy = Math.pow(asteroidDiameter / 100, 3) * Math.pow(impactVelocity / 20, 2) * 0.5;
-      
-      // Determinar tipo de impacto baseado no diâmetro (lógica científica correta)
-      const isAirburst = asteroidDiameter <= 150; // Asteroides <= 150m geralmente explodem na atmosfera
-      const impactType = isAirburst ? 'AIRBURST' : 'IMPACTO DIRETO';
-      
-      // Calcular cratera apenas para impactos diretos
-      const craterSize = isAirburst ? 0 : asteroidDiameter * 0.02; // 2% do diâmetro apenas para impactos diretos
-      const fireballRadius = asteroidDiameter * 0.01; // Raio da bola de fogo independente do tipo
-      
-      const results = {
-        impact_energy_mt: Math.round(energy * 10) / 10,
-        seismic_magnitude: Math.round((Math.log10(energy) + 4) * 10) / 10,
-        crater_diameter_km: Math.round(craterSize * 10) / 10,
-        fireball_radius_km: Math.round(fireballRadius * 10) / 10,
-        shockwave_intensity_db: Math.round(120 + (energy * 2)),
-        peak_winds_kmh: Math.round(200 + (energy * 10)),
-        impact_type: impactType,
-        fireball_victims: Math.round(energy * 3000),
-        burn_victims: Math.round(energy * 8000),
-        shockwave_victims: Math.round(energy * 5000),
-        burned_trees: Math.round(energy * 1000),
-        collapsed_houses: Math.round(energy * 1500),
-        fallen_trees: Math.round(energy * 2000),
-        frequency: energy > 20 ? '1 em 500 anos' : energy > 10 ? '1 em 1000 anos' : '1 em 2000 anos'
-      };
-      
-      setSimulationResults(results);
-      setUsingBackend(false);
+    ];
+
+    setSafeZones(safeZonesData);
+    setShelters(safeZonesData.filter(zone => zone.type === 'shelter'));
+
+    // Rotas de evacuação
+    const routes = safeZonesData.map(zone => ({
+      id: zone.id,
+      name: zone.name,
+      from: center,
+      to: zone.position,
+      distance: zone.distance,
+      estimatedTime: Math.round(zone.distance / 30),
+      capacity: zone.capacity,
+      status: 'active'
+    }));
+
+    setEvacuationRoutes(routes);
+  }, [center]);
+
+  // Gerar alertas
+  const generateAlerts = useCallback((data) => {
+    const newAlerts = [
+      {
+        id: Date.now(),
+        type: 'impact',
+        severity: 'critical',
+        message: `Impacto detectado: ${data.impact_energy_mt} MT`,
+        timestamp: new Date(),
+        location: 'Centro da cidade'
+      },
+      {
+        id: Date.now() + 1,
+        type: 'evacuation',
+        severity: 'high',
+        message: `Evacuação iniciada para zona de ${data.fireball_radius_km} km`,
+        timestamp: new Date(),
+        location: 'Todas as zonas afetadas'
+      },
+      {
+        id: Date.now() + 2,
+        type: 'seismic',
+        severity: 'medium',
+        message: `Terremoto magnitude ${data.seismic_magnitude} detectado`,
+        timestamp: new Date(),
+        location: 'Região metropolitana'
+      }
+    ];
+
+    setAlerts(prev => [...newAlerts, ...prev].slice(0, 10));
+  }, []);
+
+  // Executar simulação
+  const runSimulation = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await cosmosAPI.simulateImpact({
+        diameter_m: 100,
+        velocity_kms: 35,
+        impact_angle_deg: 24,
+        target_type: 'rocha',
+        latitude: center[0],
+        longitude: center[1]
+      });
+
+      if (result.success && result.data) {
+        const data = result.data;
+        const mappedData = {
+          impact_energy_mt: data.energia?.equivalente_tnt_megatons || 0,
+          seismic_magnitude: data.terremoto?.magnitude_richter || 0,
+          crater_diameter_km: data.cratera?.diametro_final_km || 0,
+          fireball_radius_km: data.fireball?.raio_queimadura_3_grau_km || 0,
+          shockwave_intensity_db: data.onda_de_choque_e_vento?.nivel_som_1km_db || 0,
+          peak_winds_kmh: (data.onda_de_choque_e_vento?.pico_vento_ms || 0) * 3.6,
+          impact_type: data.cratera?.is_airburst ? 'AIRBURST' : 'IMPACTO DIRETO',
+          timestamp: new Date()
+        };
+
+        setSimulationData(mappedData);
+        generateZonesAndRoutes(mappedData);
+        generateAlerts(mappedData);
+      }
+    } catch (error) {
+      console.error('Erro na simulação:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [center, generateZonesAndRoutes, generateAlerts]);
 
-  // Verificação de segurança para safeSimulationResults
-  const safeSimulationResults = safeSimulationResults || {
-    impact_energy_mt: 0,
-    seismic_magnitude: 0,
-    crater_diameter_km: 0,
-    fireball_radius_km: 0,
-    shockwave_intensity_db: 0,
-    peak_winds_kmh: 0,
-    impact_type: 'IMPACTO DIRETO',
-    fireball_victims: 0,
-    burn_victims: 0,
-    shockwave_victims: 0,
-    burned_trees: 0,
-    collapsed_houses: 0,
-    fallen_trees: 0,
-    frequency: 'N/A'
-  };
+  // Atualização automática
+  useEffect(() => {
+    const interval = setInterval(() => {
+      checkApiStatus();
+      setLastUpdate(new Date());
+      if (simulationData) {
+        runSimulation();
+      }
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [checkApiStatus, runSimulation, simulationData]);
+
+  // Inicialização
+  useEffect(() => {
+    checkApiStatus();
+    runSimulation();
+  }, [checkApiStatus, runSimulation]);
+
+  // Filtrar alertas
+  const filteredAlerts = alerts.filter(alert => {
+    if (severityFilter !== 'all' && alert.severity !== severityFilter) return false;
+    if (timeFilter === '1h' && Date.now() - alert.timestamp.getTime() > 3600000) return false;
+    if (timeFilter === '24h' && Date.now() - alert.timestamp.getTime() > 86400000) return false;
+    return true;
+  });
 
   return (
-    <div className="min-h-screen bg-blue-900 text-white">
-      {/* Header */}
-      <div className="bg-blue-800 border-b border-blue-700 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div>
-              <h1 className="text-2xl font-bold text-white">IMPACTOR-2025</h1>
-              <p className="text-blue-200 text-sm">NASA Space Apps Challenge</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center space-x-6">
-          <div className="text-right">
-              <div className="text-sm text-blue-200">STATUS: MONITORAMENTO ATIVO</div>
-              <div className="text-sm text-green-400">CONEXÃO: ONLINE</div>
-              {safeSimulationResults && (
-                <div className={`text-xs mt-1 ${usingBackend ? 'text-green-400' : 'text-yellow-400'}`}>
-                  {usingBackend ? '✓ Backend API' : '⚠ Cálculo Local'}
+    <div className={`min-h-screen transition-colors duration-300 ${
+      darkMode 
+        ? 'bg-gray-900 text-white' 
+        : 'bg-gray-50 text-gray-900'
+    }`}>
+      {/* Header Fixo */}
+      <header className={`fixed top-0 left-0 right-0 z-50 border-b transition-colors duration-300 ${
+        darkMode 
+          ? 'bg-gray-800 border-gray-700' 
+          : 'bg-white border-gray-200'
+      }`}>
+        <div className="px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-6">
+              <div className="flex items-center space-x-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  darkMode ? 'bg-blue-600' : 'bg-blue-500'
+                }`}>
+                  <span className="text-xl">🌌</span>
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold">COSMOS SENTINEL</h1>
+                  <p className="text-sm opacity-70">Sistema de Monitoramento</p>
+                </div>
               </div>
-            )}
             </div>
+
+            <div className="flex items-center space-x-6">
+              <div className="flex items-center space-x-4">
+                <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  apiStatus === 'online' 
+                    ? 'bg-green-100 text-green-800' 
+                    : apiStatus === 'connecting'
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  {apiStatus === 'online' ? '🟢 Online' : 
+                   apiStatus === 'connecting' ? '🟡 Conectando' : '🔴 Offline'}
+                </div>
+                <Clock />
+              </div>
+              
               <button
-                onClick={() => window.location.href = '?dashboard=government'}
-              className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-white font-medium"
+                onClick={() => setDarkMode(!darkMode)}
+                className={`p-2 rounded-lg transition-colors ${
+                  darkMode 
+                    ? 'hover:bg-gray-700' 
+                    : 'hover:bg-gray-100'
+                }`}
               >
-              Dashboard Governamental
+                {darkMode ? '☀️' : '🌙'}
               </button>
             </div>
           </div>
         </div>
+      </header>
 
-      <div className="max-w-7xl mx-auto p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          
-          {/* PAINEL ESQUERDO - Parâmetros de Simulação */}
-          <div className="space-y-6">
+      {/* Layout Principal */}
+      <div className="pt-20 flex h-screen">
+        {/* Painel Lateral */}
+        <aside className={`w-80 border-r transition-colors duration-300 ${
+          darkMode 
+            ? 'bg-gray-800 border-gray-700' 
+            : 'bg-white border-gray-200'
+        }`}>
+          <div className="p-6">
+            <h2 className="text-lg font-semibold mb-6">Filtros e Controles</h2>
             
-            <div className="bg-blue-800 rounded-lg p-6">
-              <h2 className="text-xl font-semibold text-white mb-6">Parâmetros de Simulação</h2>
-              
-              <div className="space-y-6">
-                
-                {/* Diâmetro do Asteroide */}
-                <div>
-                  <label className="block text-sm font-medium text-blue-200 mb-2">
-                    Diâmetro do Asteroide: {asteroidDiameter}m
-                  </label>
-                  <input
-                    type="range"
-                    min="10"
-                    max="1000"
-                    value={asteroidDiameter}
-                    onChange={(e) => setAsteroidDiameter(Number(e.target.value))}
-                    className="w-full h-2 bg-blue-600 rounded-lg appearance-none cursor-pointer"
-                  />
-                  <div className="flex items-center mt-2">
-                    <input
-                      type="radio"
-                      name="diameter-type"
-                      className="mr-2"
-                      defaultChecked
-                    />
-                    <span className="text-sm text-blue-200">Médio - Airburst ou impacto</span>
-                  </div>
-                </div>
-
-                {/* Velocidade de Impacto */}
-                <div>
-                  <label className="block text-sm font-medium text-blue-200 mb-2">
-                    Velocidade de Impacto: {impactVelocity} km/s
-                  </label>
-                  <input
-                    type="range"
-                    min="10"
-                    max="70"
-                    value={impactVelocity}
-                    onChange={(e) => setImpactVelocity(Number(e.target.value))}
-                    className="w-full h-2 bg-blue-600 rounded-lg appearance-none cursor-pointer"
-                  />
-                  <div className="flex items-center mt-2">
-                    <input
-                      type="radio"
-                      name="velocity-type"
-                      className="mr-2"
-                      defaultChecked
-                    />
-                    <span className="text-sm text-blue-200">Velocidade média</span>
-                  </div>
-                </div>
-
-                {/* Ângulo de Impacto */}
-                <div>
-                  <label className="block text-sm font-medium text-blue-200 mb-2">
-                    Ângulo de Impacto: {impactAngle}°
-                  </label>
-                  <input
-                    type="range"
-                    min="5"
-                    max="90"
-                    value={impactAngle}
-                    onChange={(e) => setImpactAngle(Number(e.target.value))}
-                    className="w-full h-2 bg-blue-600 rounded-lg appearance-none cursor-pointer"
-                  />
-                  <div className="flex items-center mt-2">
-                    <input
-                      type="radio"
-                      name="angle-type"
-                      className="mr-2"
-                      defaultChecked
-                    />
-                    <span className="text-sm text-blue-200">Rasante - Airburst ou impacto</span>
-                  </div>
-                </div>
-
-                {/* Coordenadas */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-blue-200 mb-2">Latitude</label>
-                    <input
-                      type="text"
-                      value={latitude}
-                      onChange={(e) => setLatitude(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-blue-700 border border-blue-600 rounded-md text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-blue-200 mb-2">Longitude</label>
-                    <input
-                      type="text"
-                      value={longitude}
-                      onChange={(e) => setLongitude(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-blue-700 border border-blue-600 rounded-md text-white"
-                    />
-                  </div>
-                </div>
-
-                {/* Estratégia de Mitigação */}
-                <div>
-                  <label className="block text-sm font-medium text-blue-200 mb-2">Estratégia de Mitigação</label>
-                  <select
-                    value={mitigationStrategy}
-                    onChange={(e) => setMitigationStrategy(e.target.value)}
-                    className="w-full px-3 py-2 bg-blue-700 border border-blue-600 rounded-md text-white"
-                  >
-                    <option value="Nenhuma">Nenhuma</option>
-                    <option value="Deflexão">Deflexão</option>
-                    <option value="Fragmentação">Fragmentação</option>
-                    <option value="Interceptação">Interceptação</option>
-                  </select>
-                </div>
-
-                {/* Tempo de Deflexão */}
-                <div>
-                  <label className="block text-sm font-medium text-blue-200 mb-2">
-                    Tempo de Deflexão: {deflectionTime} dias
-                  </label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="365"
-                    value={deflectionTime}
-                    onChange={(e) => setDeflectionTime(Number(e.target.value))}
-                    className="w-full h-2 bg-blue-600 rounded-lg appearance-none cursor-pointer"
-                  />
-                </div>
-
-                {/* Tempo até Impacto */}
-                <div>
-                  <label className="block text-sm font-medium text-blue-200 mb-2">
-                    Tempo até Impacto: {timeToImpact} horas
-                  </label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="8760"
-                    value={timeToImpact}
-                    onChange={(e) => setTimeToImpact(Number(e.target.value))}
-                    className="w-full h-2 bg-blue-600 rounded-lg appearance-none cursor-pointer"
-                  />
-                </div>
-
-                {/* População em Risco */}
-                <div>
-                  <label className="block text-sm font-medium text-blue-200 mb-2">
-                    População em Risco: {populationAtRisk}M
-                  </label>
-                  <input
-                    type="range"
-                    min="0.1"
-                    max="50"
-                    step="0.1"
-                    value={populationAtRisk}
-                    onChange={(e) => setPopulationAtRisk(Number(e.target.value))}
-                    className="w-full h-2 bg-blue-600 rounded-lg appearance-none cursor-pointer"
-                  />
-                </div>
-
-                {/* Botão de Simulação */}
-                <button
-                  onClick={runSimulation}
-                  disabled={loading}
-                  className={`w-full py-4 px-6 rounded-lg font-bold text-lg transition-all ${
-                    loading
-                      ? 'bg-gray-600 cursor-not-allowed'
-                      : 'bg-orange-600 hover:bg-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+            {/* Filtros */}
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium mb-2">Severidade</label>
+                <select
+                  value={severityFilter}
+                  onChange={(e) => setSeverityFilter(e.target.value)}
+                  className={`w-full p-3 rounded-lg border transition-colors ${
+                    darkMode 
+                      ? 'bg-gray-700 border-gray-600 text-white' 
+                      : 'bg-white border-gray-300 text-gray-900'
                   }`}
                 >
-                  {loading ? 'EXECUTANDO SIMULAÇÃO...' : 'RODAR SIMULAÇÃO DE IMPACTO'}
+                  <option value="all">Todas</option>
+                  <option value="critical">Crítica</option>
+                  <option value="high">Alta</option>
+                  <option value="medium">Média</option>
+                  <option value="low">Baixa</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Zona</label>
+                <select
+                  value={zoneFilter}
+                  onChange={(e) => setZoneFilter(e.target.value)}
+                  className={`w-full p-3 rounded-lg border transition-colors ${
+                    darkMode 
+                      ? 'bg-gray-700 border-gray-600 text-white' 
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                >
+                  <option value="all">Todas</option>
+                  <option value="safe">Zonas Seguras</option>
+                  <option value="danger">Zonas de Perigo</option>
+                  <option value="shelters">Abrigos</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Período</label>
+                <select
+                  value={timeFilter}
+                  onChange={(e) => setTimeFilter(e.target.value)}
+                  className={`w-full p-3 rounded-lg border transition-colors ${
+                    darkMode 
+                      ? 'bg-gray-700 border-gray-600 text-white' 
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                >
+                  <option value="1h">Última hora</option>
+                  <option value="24h">Últimas 24h</option>
+                  <option value="7d">Últimos 7 dias</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Botão de Simulação */}
+            <div className="mt-8">
+              <button
+                onClick={runSimulation}
+                disabled={loading}
+                className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
+                  loading 
+                    ? 'bg-gray-500 cursor-not-allowed' 
+                    : 'bg-blue-600 hover:bg-blue-700'
+                } text-white`}
+              >
+                {loading ? '🔄 Simulando...' : '🚀 Executar Simulação'}
+              </button>
+            </div>
+
+            {/* Status da Simulação */}
+            {simulationData && (
+              <div className="mt-6 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                <h3 className="font-medium mb-2">Última Simulação</h3>
+                <div className="text-sm space-y-1">
+                  <div>Energia: {simulationData.impact_energy_mt} MT</div>
+                  <div>Tipo: {simulationData.impact_type}</div>
+                  <div>Raio: {simulationData.fireball_radius_km} km</div>
+                </div>
+              </div>
+            )}
+
+            {/* Informações de Atualização */}
+            <div className="mt-4 text-xs opacity-60">
+              Última atualização: {lastUpdate.toLocaleTimeString()}
+            </div>
+          </div>
+        </aside>
+
+        {/* Área Principal */}
+        <main className="flex-1 flex">
+          {/* Mapa */}
+          <div className={`flex-1 transition-all duration-300 ${
+            isFullscreen ? 'fixed inset-0 z-40' : 'relative'
+          }`}>
+            <div className="h-full relative">
+              {/* Controles do Mapa */}
+              <div className={`absolute top-4 right-4 z-10 flex space-x-2 ${
+                darkMode ? 'bg-gray-800' : 'bg-white'
+              } rounded-lg shadow-lg p-2`}>
+                <button
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className={`p-2 rounded transition-colors ${
+                    darkMode 
+                      ? 'hover:bg-gray-700' 
+                      : 'hover:bg-gray-100'
+                  }`}
+                >
+                  {isFullscreen ? '🔽' : '🔼'}
                 </button>
               </div>
-            </div>
-          </div>
 
-          {/* PAINEL DIREITO - Resultados */}
-          <div className="space-y-6">
-            
-            {/* Cards de Resultados */}
-            <div className="grid grid-cols-2 gap-4">
-              
-              {/* Energia do Impacto */}
-              <div className="bg-red-600 rounded-lg p-4">
-                <div className="text-2xl font-bold text-white">
-                  {safeSimulationResults ? safeSimulationResults.impact_energy_mt : '0'} Megatons TNT
-              </div>
-                <div className="text-sm text-red-200">ENERGIA DO IMPACTO</div>
-              </div>
-              
-              {/* Magnitude Sísmica */}
-              <div className="bg-pink-600 rounded-lg p-4">
-                <div className="text-2xl font-bold text-white">
-                  {safeSimulationResults ? safeSimulationResults.seismic_magnitude : '0'} Escala Richter
-                </div>
-                <div className="text-sm text-pink-200">MAGNITUDE SÍSMICA</div>
-            </div>
-
-              {/* Tamanho da Cratera ou Explosão Aérea */}
-              <div className="bg-yellow-600 rounded-lg p-4">
-                <div className="text-2xl font-bold text-white">
-                  {safeSimulationResults && safeSimulationResults.impact_type ? (
-                    safeSimulationResults.impact_type === 'AIRBURST' 
-                      ? 'EXPLOSÃO AÉREA' 
-                      : `${safeSimulationResults.crater_diameter_km} Km de diâmetro`
-                  ) : '0 Km de diâmetro'}
-                    </div>
-                <div className="text-sm text-yellow-200">
-                  {safeSimulationResults && safeSimulationResults.impact_type === 'AIRBURST' 
-                    ? 'SEM CRATERA - AIRBURST' 
-                    : 'TAMANHO DA CRATERA'
+              <MapContainer
+                center={center}
+                zoom={8}
+                style={{ 
+                  height: '100%', 
+                  width: '100%',
+                  cursor: isFullscreen ? 'grab' : 'default'
+                }}
+                className={`transition-all duration-300 ${
+                  isFullscreen ? 'cursor-grab' : ''
+                }`}
+              >
+                <MapController isFullscreen={isFullscreen} simulationData={simulationData} />
+                
+                <TileLayer
+                  url={darkMode 
+                    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                    : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   }
-                </div>
-                {safeSimulationResults && safeSimulationResults.impact_type === 'AIRBURST' && (
-                  <div className="text-xs text-yellow-300 mt-1">
-                    Asteroide explode na atmosfera
-                  </div>
-                )}
-              </div>
-              
-              {/* Status Deflexão */}
-              <div className="bg-red-600 rounded-lg p-4">
-                <div className="text-lg font-bold text-white">
-                  {safeSimulationResults ? 'SIMULAÇÃO CONCLUÍDA' : 'AGUARDANDO SIMULAÇÃO'}
-                    </div>
-                <div className="text-sm text-red-200">STATUS DEFLEXÃO</div>
-              </div>
-              
-              {/* Bola de Fogo */}
-              <div className="bg-orange-600 rounded-lg p-4">
-                <div className="text-xl font-bold text-white">
-                  {safeSimulationResults ? safeSimulationResults.fireball_radius_km : '0'} Km de raio
-                    </div>
-                <div className="text-sm text-orange-200">BOLA DE FOGO</div>
-                <div className="text-xs text-orange-300 mt-1">Temperatura &gt;1000°C</div>
-                <div className="text-xs text-orange-300">Ignição instantânea de materiais inflamáveis</div>
-            </div>
-
-              {/* Onda de Choque */}
-              <div className="bg-purple-600 rounded-lg p-4">
-                <div className="text-xl font-bold text-white">
-                  {safeSimulationResults ? safeSimulationResults.shockwave_intensity_db : '0'} Decibéis (dB)
-                    </div>
-                <div className="text-sm text-purple-200">ONDA DE CHOQUE</div>
-                <div className="text-xs text-purple-300 mt-1">Nível ALTO</div>
-                <div className="text-xs text-purple-300">Ruptura de tímpanos e danos estruturais severos</div>
-              </div>
-              
-              {/* Ventos de Pico */}
-              <div className="bg-cyan-600 rounded-lg p-4">
-                <div className="text-xl font-bold text-white">
-                  {safeSimulationResults ? safeSimulationResults.peak_winds_kmh : '0'} Km/h
-                    </div>
-                <div className="text-sm text-cyan-200">VENTOS DE PICO</div>
-                <div className="text-xs text-cyan-300 mt-1">Categoria F3</div>
-                <div className="text-xs text-cyan-300">Destruição total de estruturas não reforçadas</div>
-              </div>
-              
-              {/* Tipo de Impacto */}
-              <div className="bg-blue-600 rounded-lg p-4">
-                <div className="text-lg font-bold text-white">
-                  {safeSimulationResults && safeSimulationResults.impact_type ? safeSimulationResults.impact_type : 'IMPACTO DIRETO'}
-                    </div>
-                <div className="text-sm text-blue-200">TIPO DE IMPACTO</div>
-                <div className="text-xs text-blue-300 mt-1">Impacto na superfície</div>
-              </div>
-              
-              {/* Vítimas Fireball */}
-              <div className="bg-orange-600 rounded-lg p-4">
-                <div className="text-xl font-bold text-white">
-                  {safeSimulationResults ? safeSimulationResults.fireball_victims : '0'}K Pessoas
-                    </div>
-                <div className="text-sm text-orange-200">VÍTIMAS FIREBALL</div>
-                <div className="text-xs text-orange-300 mt-1">Raio {safeSimulationResults ? safeSimulationResults.fireball_radius_km : '0'} km</div>
-                <div className="text-xs text-orange-300">Morte instantânea por calor extremo</div>
-            </div>
-
-              {/* Queimaduras 2º Grau */}
-              <div className="bg-yellow-600 rounded-lg p-4">
-                <div className="text-xl font-bold text-white">
-                  {safeSimulationResults ? safeSimulationResults.burn_victims : '0'}K Pessoas
-                    </div>
-                <div className="text-sm text-yellow-200">QUEIMADURAS 2º GRAU</div>
-                <div className="text-xs text-yellow-300 mt-1">Raio {safeSimulationResults ? safeSimulationResults.fireball_radius_km * 2 : '0'} km</div>
-                <div className="text-xs text-yellow-300">Roupas pegam fogo</div>
-              </div>
-              
-              {/* Vítimas Onda Choque */}
-              <div className="bg-cyan-600 rounded-lg p-4">
-                <div className="text-xl font-bold text-white">
-                  {safeSimulationResults ? safeSimulationResults.shockwave_victims : '0'} Pessoas
-                    </div>
-                <div className="text-sm text-cyan-200">VÍTIMAS ONDA CHOQUE</div>
-                <div className="text-xs text-cyan-300 mt-1">Intensidade {safeSimulationResults ? safeSimulationResults.shockwave_intensity_db : '0'} dB</div>
-                <div className="text-xs text-cyan-300">Colapso de estruturas</div>
-              </div>
-              
-              {/* Árvores Incendiadas */}
-              <div className="bg-green-600 rounded-lg p-4">
-                <div className="text-2xl font-bold text-white">
-                  {safeSimulationResults ? safeSimulationResults.burned_trees : '0'}
-                    </div>
-                <div className="text-sm text-green-200">ÁRVORES INCENDIADAS</div>
-              </div>
-              
-              {/* Casas Colapsam */}
-              <div className="bg-amber-600 rounded-lg p-4">
-                <div className="text-2xl font-bold text-white">
-                  {safeSimulationResults ? safeSimulationResults.collapsed_houses : '0'}
-                    </div>
-                <div className="text-sm text-amber-200">CASAS COLAPSAM</div>
-            </div>
-
-              {/* Árvores Derrubadas */}
-              <div className="bg-gray-600 rounded-lg p-4">
-                <div className="text-2xl font-bold text-white">
-                  {safeSimulationResults ? safeSimulationResults.fallen_trees : '0'}
-                </div>
-                <div className="text-sm text-gray-200">ÁRVORES DERRUBADAS</div>
-              </div>
-              
-              {/* Frequência */}
-              <div className="bg-blue-600 rounded-lg p-4">
-                <div className="text-lg font-bold text-white">
-                  {safeSimulationResults ? safeSimulationResults.frequency : 'N/A'}
-                  </div>
-                <div className="text-sm text-blue-200">FREQUÊNCIA</div>
-                <div className="text-xs text-blue-300 mt-1">Eventos similares</div>
-                </div>
-              </div>
-              
-            {/* Zona de Impacto Global - Mapa Interativo */}
-            <div className="bg-blue-800 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-white mb-4">Zona de Impacto Global</h3>
-              
-              <div className="bg-blue-900 rounded-lg overflow-hidden" style={{ height: '400px' }}>
-                {safeSimulationResults ? (
-                  <MapContainer
-                    center={[latitude, longitude]}
-                    zoom={10}
-                    style={{ height: '100%', width: '100%' }}
-                    className="z-0"
-                  >
-                    <TileLayer
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    />
-                    
-                    {/* Marcador do Impacto */}
-                    <Marker position={[latitude, longitude]}>
-                      <Popup>
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                />
+                
+                {/* Marcador Central */}
+                <Marker position={center}>
+                  <Popup>
                     <div className="text-center">
-                          <h3 className="font-bold text-red-600">PONTO DE IMPACTO</h3>
-                          <p className="text-sm">Energia: {safeSimulationResults.impact_energy_mt} MT</p>
-                          <p className="text-sm">
-                            {safeSimulationResults && safeSimulationResults.impact_type ? (
-                              safeSimulationResults.impact_type === 'AIRBURST' 
-                                ? 'Airburst - Sem cratera' 
-                                : `Cratera: ${safeSimulationResults.crater_diameter_km} km`
-                            ) : 'Cratera: 0 km'}
-                          </p>
+                      <h3 className="font-bold text-red-600">Ponto de Impacto</h3>
+                      <p className="text-sm">Coordenadas: {center[0].toFixed(4)}, {center[1].toFixed(4)}</p>
                     </div>
-                      </Popup>
-                    </Marker>
-                    
-                    {/* Zona de Bola de Fogo */}
-                    <Circle
-                      center={[latitude, longitude]}
-                      radius={safeSimulationResults.fireball_radius_km * 1000}
-                      pathOptions={{ color: 'red', fillColor: 'red', fillOpacity: 0.3 }}
-                    />
-                    
-                    {/* Zona de Destruição - apenas para impactos diretos */}
-                    {safeSimulationResults && safeSimulationResults.impact_type && safeSimulationResults.impact_type !== 'AIRBURST' && (
-                      <Circle
-                        center={[latitude, longitude]}
-                        radius={safeSimulationResults.crater_diameter_km * 1000}
-                        pathOptions={{ color: 'orange', fillColor: 'orange', fillOpacity: 0.2 }}
-                      />
-                    )}
-                    
-                    {/* Zona de Tsunami - apenas para impactos diretos */}
-                    {safeSimulationResults && safeSimulationResults.impact_type && safeSimulationResults.impact_type !== 'AIRBURST' && (
-                      <Circle
-                        center={[latitude, longitude]}
-                        radius={safeSimulationResults.crater_diameter_km * 2000}
-                        pathOptions={{ color: 'blue', fillColor: 'blue', fillOpacity: 0.1 }}
-                      />
-                    )}
-                  </MapContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center">
-                      <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                </div>
-                      <p className="text-blue-200 mb-4">
-                        Execute a simulação para visualizar o mapa de impacto
-                      </p>
-                      
-                      <div className="space-y-2 text-sm text-blue-300">
-                        <div>• Bola de Fogo - Ignição instantânea (&gt;1000°C)</div>
-                        {safeSimulationResults && safeSimulationResults.impact_type ? (
-                          safeSimulationResults.impact_type === 'AIRBURST' ? (
-                            <div>• Airburst - Explosão atmosférica sem cratera</div>
-                          ) : (
-                            <>
-                              <div>• Zona de Destruição - Raio da cratera + devastação total</div>
-                              <div>• Zona de Tsunami - Área costeira de risco</div>
-                            </>
-                          )
-                        ) : (
-                          <div>• Zona de Destruição - Raio da cratera + devastação total</div>
-                        )}
+                  </Popup>
+                </Marker>
+                
+                {/* Zonas de Perigo */}
+                {dangerZones.map((zone, index) => (
+                  <Circle
+                    key={index}
+                    center={center}
+                    radius={zone.radius * 1000}
+                    pathOptions={{ 
+                      color: zone.color, 
+                      fillColor: zone.color, 
+                      fillOpacity: zone.opacity 
+                    }}
+                  />
+                ))}
+                
+                {/* Zonas Seguras */}
+                {safeZones.map(zone => (
+                  <Circle
+                    key={zone.id}
+                    center={zone.position}
+                    radius={5000}
+                    pathOptions={{ 
+                      color: 'green', 
+                      fillColor: 'green', 
+                      fillOpacity: 0.3 
+                    }}
+                  />
+                ))}
+                
+                {/* Abrigos */}
+                {shelters.map(shelter => (
+                  <Marker key={shelter.id} position={shelter.position}>
+                    <Popup>
+                      <div className="text-center">
+                        <h3 className="font-bold text-green-600">🏠 {shelter.name}</h3>
+                        <p className="text-sm">Capacidade: {shelter.capacity.toLocaleString()} pessoas</p>
+                        <p className="text-sm">Distância: {shelter.distance.toFixed(1)} km</p>
                       </div>
-                    </div>
-                  </div>
-                )}
-            </div>
-
-              {/* Legenda do Mapa */}
-              {safeSimulationResults && (
-                <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
-                  <div className="flex items-center">
-                    <div className="w-4 h-4 bg-red-500 rounded-full mr-2"></div>
-                    <span className="text-blue-200">Bola de Fogo ({safeSimulationResults.fireball_radius_km} km)</span>
-                      </div>
-                  {safeSimulationResults && safeSimulationResults.impact_type && safeSimulationResults.impact_type !== 'AIRBURST' && (
-                    <>
-                      <div className="flex items-center">
-                        <div className="w-4 h-4 bg-orange-500 rounded-full mr-2"></div>
-                        <span className="text-blue-200">Destruição ({safeSimulationResults.crater_diameter_km} km)</span>
-                      </div>
-                      <div className="flex items-center">
-                        <div className="w-4 h-4 bg-blue-500 rounded-full mr-2"></div>
-                        <span className="text-blue-200">Tsunami ({safeSimulationResults.crater_diameter_km * 2} km)</span>
-                      </div>
-                    </>
-                  )}
-                  {safeSimulationResults && safeSimulationResults.impact_type && safeSimulationResults.impact_type === 'AIRBURST' && (
-                    <div className="flex items-center">
-                      <div className="w-4 h-4 bg-yellow-500 rounded-full mr-2"></div>
-                      <span className="text-blue-200">Airburst - Sem cratera</span>
-                    </div>
-                  )}
-                    </div>
-              )}
-              </div>
-
-            {/* Módulo de Evacuação */}
-            <div className="bg-blue-800 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-white mb-4">Módulo de Evacuação - Fortaleza</h3>
-              
-              <div className="space-y-3">
-                <label className="flex items-center">
-                  <input type="checkbox" className="mr-3" />
-                  <span className="text-blue-200">Zona Destruição</span>
-                </label>
-                <label className="flex items-center">
-                  <input type="checkbox" className="mr-3" />
-                  <span className="text-blue-200">Zona Tsunami</span>
-                </label>
-                <label className="flex items-center">
-                  <input type="checkbox" className="mr-3" />
-                  <span className="text-blue-200">Rotas Evacuação</span>
-                </label>
-              </div>
+                    </Popup>
+                  </Marker>
+                ))}
+                
+                {/* Rotas de Evacuação */}
+                {evacuationRoutes.map(route => (
+                  <Polyline
+                    key={route.id}
+                    positions={[route.from, route.to]}
+                    pathOptions={{ color: 'blue', weight: 3, opacity: 0.7 }}
+                  />
+                ))}
+              </MapContainer>
             </div>
           </div>
-        </div>
+
+          {/* Painel de Alertas */}
+          <aside className={`w-80 border-l transition-colors duration-300 ${
+            darkMode 
+              ? 'bg-gray-800 border-gray-700' 
+              : 'bg-white border-gray-200'
+          }`}>
+            <div className="p-6">
+              <h2 className="text-lg font-semibold mb-6">Alertas Recentes</h2>
+              
+              <div className="space-y-4">
+                {filteredAlerts.length === 0 ? (
+                  <div className="text-center py-8 opacity-60">
+                    <div className="text-4xl mb-2">🔔</div>
+                    <p>Nenhum alerta encontrado</p>
+                  </div>
+                ) : (
+                  filteredAlerts.map(alert => (
+                    <div
+                      key={alert.id}
+                      className={`p-4 rounded-lg border transition-colors ${
+                        alert.severity === 'critical' 
+                          ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
+                          : alert.severity === 'high'
+                          ? 'bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800'
+                          : 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className={`px-2 py-1 rounded text-xs font-medium ${
+                          alert.severity === 'critical' 
+                            ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
+                            : alert.severity === 'high'
+                            ? 'bg-orange-100 text-orange-800 dark:bg-orange-800 dark:text-orange-100'
+                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100'
+                        }`}>
+                          {alert.severity.toUpperCase()}
+                        </div>
+                        <span className="text-xs opacity-60">
+                          {alert.timestamp.toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium mb-1">{alert.message}</p>
+                      <p className="text-xs opacity-60">{alert.location}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </aside>
+        </main>
       </div>
     </div>
   );
-};
+}
 
 export default AsteroidDashboard;

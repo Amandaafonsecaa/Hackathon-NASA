@@ -245,7 +245,30 @@ class CosmosSentinelAPI {
 
   // ===== UTILITÁRIOS =====
   async checkBackendHealth() {
-    return this.request('/');
+    // Health check não precisa do prefixo /api/v1
+    const url = 'http://localhost:8000/health';
+    const config = {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      timeout: this.timeout,
+    };
+
+    try {
+      const response = await fetch(url, config);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      return { success: true, data };
+    } catch (error) {
+      console.error(`API Error [${url}]:`, error);
+      throw error;
+    }
   }
 
   // Método para testar conectividade
