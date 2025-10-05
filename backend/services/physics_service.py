@@ -11,22 +11,6 @@ def _calculate_energy_and_mass(diameter_m, velocity_kms, densidade_impactor=3000
     return energy_joules, mass_kg
 
 def _calculate_crater(energy_joules, diameter_m, velocity_kms, angulo_graus, tipo_terreno, densidade_impactor, rho_t):
-    """
-    Calcula cratera apenas para impactos diretos (não airburst).
-    Para airburst, retorna valores zero pois não há cratera.
-    """
-    # Determinar se é airburst baseado no diâmetro e tipo de terreno
-    is_airburst = diameter_m <= 150 and tipo_terreno != "oceano"
-    
-    if is_airburst:
-        return {
-            "diametro_final_km": 0.0,
-            "profundidade_m": 0.0,
-            "is_airburst": True,
-            "explanation": "Airburst - explosão atmosférica sem cratera"
-        }
-    
-    # Cálculo de cratera apenas para impactos diretos
     g = 9.81
     v_ms = velocity_kms * 1000
     # Fórmula de Holsapple-Schmidt simplificada
@@ -37,8 +21,6 @@ def _calculate_crater(energy_joules, diameter_m, velocity_kms, angulo_graus, tip
     return {
         "diametro_final_km": D_f / 1000,
         "profundidade_m": profundidade,
-        "is_airburst": False,
-        "explanation": "Impacto direto - cratera formada"
     }
 
 def _calculate_fireball(energy_joules, diameter_m, tipo_terreno):

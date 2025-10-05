@@ -7,19 +7,7 @@ import asyncio
 import json
 import time
 from typing import Dict, List, Set, Optional, Any
-
-try:
-    from fastapi import WebSocket, WebSocketDisconnect
-except ImportError:
-    # Mock para FastAPI WebSocket
-    class WebSocket:
-        def __init__(self): pass
-        async def accept(self): pass
-        async def send_text(self, text): pass
-        async def receive_text(self): return "{}"
-        async def close(self): pass
-    class WebSocketDisconnect(Exception): pass
-
+from fastapi import WebSocket, WebSocketDisconnect
 from dataclasses import dataclass, asdict
 from enum import Enum
 import logging
