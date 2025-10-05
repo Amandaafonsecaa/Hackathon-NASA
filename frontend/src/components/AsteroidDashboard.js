@@ -23,7 +23,7 @@ const AsteroidDashboard = () => {
   const [deflectionTime, setDeflectionTime] = useState(15); // dias
   const [timeToImpact, setTimeToImpact] = useState(72); // horas
   const [populationAtRisk, setPopulationAtRisk] = useState(2.5); // milhões
-  const [simulationResults, setSimulationResults] = useState(null);
+  const [safeSimulationResults, setSimulationResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [backendConnected, setBackendConnected] = useState(false);
   const [usingBackend, setUsingBackend] = useState(false);
@@ -61,16 +61,47 @@ const AsteroidDashboard = () => {
       
       const result = await cosmosAPI.simulateImpact(simulationData);
       
+      console.log('Resultado da API:', result);
+      
       if (result.success && result.data) {
         console.log('Dados recebidos do backend:', result.data);
-        setSimulationResults(result.data);
+        
+        // Mapear dados do backend para estrutura esperada pelo frontend
+        const backendData = result.data;
+        const mappedData = {
+          impact_energy_mt: backendData.energia?.equivalente_tnt_megatons || 0,
+          seismic_magnitude: backendData.terremoto?.magnitude_richter || 0,
+          crater_diameter_km: backendData.cratera?.diametro_final_km || 0,
+          fireball_radius_km: backendData.fireball?.raio_queimadura_3_grau_km || 0,
+          shockwave_intensity_db: backendData.onda_de_choque_e_vento?.nivel_som_1km_db || 0,
+          peak_winds_kmh: (backendData.onda_de_choque_e_vento?.pico_vento_ms || 0) * 3.6, // converter m/s para km/h
+          impact_type: backendData.cratera?.is_airburst ? 'AIRBURST' : 'IMPACTO DIRETO',
+          // Calcular vítimas baseado na energia
+          fireball_victims: Math.round((backendData.energia?.equivalente_tnt_megatons || 0) * 3000),
+          burn_victims: Math.round((backendData.energia?.equivalente_tnt_megatons || 0) * 8000),
+          shockwave_victims: Math.round((backendData.energia?.equivalente_tnt_megatons || 0) * 5000),
+          burned_trees: Math.round((backendData.energia?.equivalente_tnt_megatons || 0) * 1000),
+          collapsed_houses: Math.round((backendData.energia?.equivalente_tnt_megatons || 0) * 1500),
+          fallen_trees: Math.round((backendData.energia?.equivalente_tnt_megatons || 0) * 2000),
+          frequency: (backendData.energia?.equivalente_tnt_megatons || 0) > 20 ? '1 em 500 anos' : 
+                    (backendData.energia?.equivalente_tnt_megatons || 0) > 10 ? '1 em 1000 anos' : '1 em 2000 anos'
+        };
+        
+        console.log('Dados mapeados:', mappedData);
+        setSimulationResults(mappedData);
         setUsingBackend(true);
       } else {
         console.log('Backend não respondeu, usando cálculo local baseado nos parâmetros');
         // Cálculo local baseado nos parâmetros reais
         const energy = Math.pow(asteroidDiameter / 100, 3) * Math.pow(impactVelocity / 20, 2) * 0.5;
-        const craterSize = asteroidDiameter * 0.02; // 2% do diâmetro
-        const fireballRadius = craterSize * 0.8;
+        
+        // Determinar tipo de impacto baseado no diâmetro (lógica científica correta)
+        const isAirburst = asteroidDiameter <= 150; // Asteroides <= 150m geralmente explodem na atmosfera
+        const impactType = isAirburst ? 'AIRBURST' : 'IMPACTO DIRETO';
+        
+        // Calcular cratera apenas para impactos diretos
+        const craterSize = isAirburst ? 0 : asteroidDiameter * 0.02; // 2% do diâmetro apenas para impactos diretos
+        const fireballRadius = asteroidDiameter * 0.01; // Raio da bola de fogo independente do tipo
         
         const results = {
           impact_energy_mt: Math.round(energy * 10) / 10,
@@ -79,7 +110,7 @@ const AsteroidDashboard = () => {
           fireball_radius_km: Math.round(fireballRadius * 10) / 10,
           shockwave_intensity_db: Math.round(120 + (energy * 2)),
           peak_winds_kmh: Math.round(200 + (energy * 10)),
-          impact_type: impactAngle < 30 ? 'AIRBURST' : 'IMPACTO DIRETO',
+          impact_type: impactType,
           fireball_victims: Math.round(energy * 3000),
           burn_victims: Math.round(energy * 8000),
           shockwave_victims: Math.round(energy * 5000),
@@ -97,8 +128,14 @@ const AsteroidDashboard = () => {
       
       // Fallback com cálculo baseado nos parâmetros
       const energy = Math.pow(asteroidDiameter / 100, 3) * Math.pow(impactVelocity / 20, 2) * 0.5;
-      const craterSize = asteroidDiameter * 0.02;
-      const fireballRadius = craterSize * 0.8;
+      
+      // Determinar tipo de impacto baseado no diâmetro (lógica científica correta)
+      const isAirburst = asteroidDiameter <= 150; // Asteroides <= 150m geralmente explodem na atmosfera
+      const impactType = isAirburst ? 'AIRBURST' : 'IMPACTO DIRETO';
+      
+      // Calcular cratera apenas para impactos diretos
+      const craterSize = isAirburst ? 0 : asteroidDiameter * 0.02; // 2% do diâmetro apenas para impactos diretos
+      const fireballRadius = asteroidDiameter * 0.01; // Raio da bola de fogo independente do tipo
       
       const results = {
         impact_energy_mt: Math.round(energy * 10) / 10,
@@ -107,7 +144,7 @@ const AsteroidDashboard = () => {
         fireball_radius_km: Math.round(fireballRadius * 10) / 10,
         shockwave_intensity_db: Math.round(120 + (energy * 2)),
         peak_winds_kmh: Math.round(200 + (energy * 10)),
-        impact_type: impactAngle < 30 ? 'AIRBURST' : 'IMPACTO DIRETO',
+        impact_type: impactType,
         fireball_victims: Math.round(energy * 3000),
         burn_victims: Math.round(energy * 8000),
         shockwave_victims: Math.round(energy * 5000),
@@ -122,6 +159,24 @@ const AsteroidDashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Verificação de segurança para safeSimulationResults
+  const safeSimulationResults = safeSimulationResults || {
+    impact_energy_mt: 0,
+    seismic_magnitude: 0,
+    crater_diameter_km: 0,
+    fireball_radius_km: 0,
+    shockwave_intensity_db: 0,
+    peak_winds_kmh: 0,
+    impact_type: 'IMPACTO DIRETO',
+    fireball_victims: 0,
+    burn_victims: 0,
+    shockwave_victims: 0,
+    burned_trees: 0,
+    collapsed_houses: 0,
+    fallen_trees: 0,
+    frequency: 'N/A'
   };
 
   return (
@@ -140,7 +195,7 @@ const AsteroidDashboard = () => {
           <div className="text-right">
               <div className="text-sm text-blue-200">STATUS: MONITORAMENTO ATIVO</div>
               <div className="text-sm text-green-400">CONEXÃO: ONLINE</div>
-              {simulationResults && (
+              {safeSimulationResults && (
                 <div className={`text-xs mt-1 ${usingBackend ? 'text-green-400' : 'text-yellow-400'}`}>
                   {usingBackend ? '✓ Backend API' : '⚠ Cálculo Local'}
               </div>
@@ -347,7 +402,7 @@ const AsteroidDashboard = () => {
               {/* Energia do Impacto */}
               <div className="bg-red-600 rounded-lg p-4">
                 <div className="text-2xl font-bold text-white">
-                  {simulationResults ? simulationResults.impact_energy_mt : '0'} Megatons TNT
+                  {safeSimulationResults ? safeSimulationResults.impact_energy_mt : '0'} Megatons TNT
               </div>
                 <div className="text-sm text-red-200">ENERGIA DO IMPACTO</div>
               </div>
@@ -355,23 +410,37 @@ const AsteroidDashboard = () => {
               {/* Magnitude Sísmica */}
               <div className="bg-pink-600 rounded-lg p-4">
                 <div className="text-2xl font-bold text-white">
-                  {simulationResults ? simulationResults.seismic_magnitude : '0'} Escala Richter
+                  {safeSimulationResults ? safeSimulationResults.seismic_magnitude : '0'} Escala Richter
                 </div>
                 <div className="text-sm text-pink-200">MAGNITUDE SÍSMICA</div>
             </div>
 
-              {/* Tamanho da Cratera */}
+              {/* Tamanho da Cratera ou Explosão Aérea */}
               <div className="bg-yellow-600 rounded-lg p-4">
                 <div className="text-2xl font-bold text-white">
-                  {simulationResults ? simulationResults.crater_diameter_km : '0'} Km de diâmetro
+                  {safeSimulationResults && safeSimulationResults.impact_type ? (
+                    safeSimulationResults.impact_type === 'AIRBURST' 
+                      ? 'EXPLOSÃO AÉREA' 
+                      : `${safeSimulationResults.crater_diameter_km} Km de diâmetro`
+                  ) : '0 Km de diâmetro'}
                     </div>
-                <div className="text-sm text-yellow-200">TAMANHO DA CRATERA</div>
+                <div className="text-sm text-yellow-200">
+                  {safeSimulationResults && safeSimulationResults.impact_type === 'AIRBURST' 
+                    ? 'SEM CRATERA - AIRBURST' 
+                    : 'TAMANHO DA CRATERA'
+                  }
+                </div>
+                {safeSimulationResults && safeSimulationResults.impact_type === 'AIRBURST' && (
+                  <div className="text-xs text-yellow-300 mt-1">
+                    Asteroide explode na atmosfera
+                  </div>
+                )}
               </div>
               
               {/* Status Deflexão */}
               <div className="bg-red-600 rounded-lg p-4">
                 <div className="text-lg font-bold text-white">
-                  {simulationResults ? 'SIMULAÇÃO CONCLUÍDA' : 'AGUARDANDO SIMULAÇÃO'}
+                  {safeSimulationResults ? 'SIMULAÇÃO CONCLUÍDA' : 'AGUARDANDO SIMULAÇÃO'}
                     </div>
                 <div className="text-sm text-red-200">STATUS DEFLEXÃO</div>
               </div>
@@ -379,7 +448,7 @@ const AsteroidDashboard = () => {
               {/* Bola de Fogo */}
               <div className="bg-orange-600 rounded-lg p-4">
                 <div className="text-xl font-bold text-white">
-                  {simulationResults ? simulationResults.fireball_radius_km : '0'} Km de raio
+                  {safeSimulationResults ? safeSimulationResults.fireball_radius_km : '0'} Km de raio
                     </div>
                 <div className="text-sm text-orange-200">BOLA DE FOGO</div>
                 <div className="text-xs text-orange-300 mt-1">Temperatura &gt;1000°C</div>
@@ -389,7 +458,7 @@ const AsteroidDashboard = () => {
               {/* Onda de Choque */}
               <div className="bg-purple-600 rounded-lg p-4">
                 <div className="text-xl font-bold text-white">
-                  {simulationResults ? simulationResults.shockwave_intensity_db : '0'} Decibéis (dB)
+                  {safeSimulationResults ? safeSimulationResults.shockwave_intensity_db : '0'} Decibéis (dB)
                     </div>
                 <div className="text-sm text-purple-200">ONDA DE CHOQUE</div>
                 <div className="text-xs text-purple-300 mt-1">Nível ALTO</div>
@@ -399,7 +468,7 @@ const AsteroidDashboard = () => {
               {/* Ventos de Pico */}
               <div className="bg-cyan-600 rounded-lg p-4">
                 <div className="text-xl font-bold text-white">
-                  {simulationResults ? simulationResults.peak_winds_kmh : '0'} Km/h
+                  {safeSimulationResults ? safeSimulationResults.peak_winds_kmh : '0'} Km/h
                     </div>
                 <div className="text-sm text-cyan-200">VENTOS DE PICO</div>
                 <div className="text-xs text-cyan-300 mt-1">Categoria F3</div>
@@ -409,7 +478,7 @@ const AsteroidDashboard = () => {
               {/* Tipo de Impacto */}
               <div className="bg-blue-600 rounded-lg p-4">
                 <div className="text-lg font-bold text-white">
-                  {simulationResults ? simulationResults.impact_type : 'IMPACTO DIRETO'}
+                  {safeSimulationResults && safeSimulationResults.impact_type ? safeSimulationResults.impact_type : 'IMPACTO DIRETO'}
                     </div>
                 <div className="text-sm text-blue-200">TIPO DE IMPACTO</div>
                 <div className="text-xs text-blue-300 mt-1">Impacto na superfície</div>
@@ -418,37 +487,37 @@ const AsteroidDashboard = () => {
               {/* Vítimas Fireball */}
               <div className="bg-orange-600 rounded-lg p-4">
                 <div className="text-xl font-bold text-white">
-                  {simulationResults ? simulationResults.fireball_victims : '0'}K Pessoas
+                  {safeSimulationResults ? safeSimulationResults.fireball_victims : '0'}K Pessoas
                     </div>
                 <div className="text-sm text-orange-200">VÍTIMAS FIREBALL</div>
-                <div className="text-xs text-orange-300 mt-1">Raio {simulationResults ? simulationResults.fireball_radius_km : '0'} km</div>
+                <div className="text-xs text-orange-300 mt-1">Raio {safeSimulationResults ? safeSimulationResults.fireball_radius_km : '0'} km</div>
                 <div className="text-xs text-orange-300">Morte instantânea por calor extremo</div>
             </div>
 
               {/* Queimaduras 2º Grau */}
               <div className="bg-yellow-600 rounded-lg p-4">
                 <div className="text-xl font-bold text-white">
-                  {simulationResults ? simulationResults.burn_victims : '0'}K Pessoas
+                  {safeSimulationResults ? safeSimulationResults.burn_victims : '0'}K Pessoas
                     </div>
                 <div className="text-sm text-yellow-200">QUEIMADURAS 2º GRAU</div>
-                <div className="text-xs text-yellow-300 mt-1">Raio {simulationResults ? simulationResults.fireball_radius_km * 2 : '0'} km</div>
+                <div className="text-xs text-yellow-300 mt-1">Raio {safeSimulationResults ? safeSimulationResults.fireball_radius_km * 2 : '0'} km</div>
                 <div className="text-xs text-yellow-300">Roupas pegam fogo</div>
               </div>
               
               {/* Vítimas Onda Choque */}
               <div className="bg-cyan-600 rounded-lg p-4">
                 <div className="text-xl font-bold text-white">
-                  {simulationResults ? simulationResults.shockwave_victims : '0'} Pessoas
+                  {safeSimulationResults ? safeSimulationResults.shockwave_victims : '0'} Pessoas
                     </div>
                 <div className="text-sm text-cyan-200">VÍTIMAS ONDA CHOQUE</div>
-                <div className="text-xs text-cyan-300 mt-1">Intensidade {simulationResults ? simulationResults.shockwave_intensity_db : '0'} dB</div>
+                <div className="text-xs text-cyan-300 mt-1">Intensidade {safeSimulationResults ? safeSimulationResults.shockwave_intensity_db : '0'} dB</div>
                 <div className="text-xs text-cyan-300">Colapso de estruturas</div>
               </div>
               
               {/* Árvores Incendiadas */}
               <div className="bg-green-600 rounded-lg p-4">
                 <div className="text-2xl font-bold text-white">
-                  {simulationResults ? simulationResults.burned_trees : '0'}
+                  {safeSimulationResults ? safeSimulationResults.burned_trees : '0'}
                     </div>
                 <div className="text-sm text-green-200">ÁRVORES INCENDIADAS</div>
               </div>
@@ -456,7 +525,7 @@ const AsteroidDashboard = () => {
               {/* Casas Colapsam */}
               <div className="bg-amber-600 rounded-lg p-4">
                 <div className="text-2xl font-bold text-white">
-                  {simulationResults ? simulationResults.collapsed_houses : '0'}
+                  {safeSimulationResults ? safeSimulationResults.collapsed_houses : '0'}
                     </div>
                 <div className="text-sm text-amber-200">CASAS COLAPSAM</div>
             </div>
@@ -464,7 +533,7 @@ const AsteroidDashboard = () => {
               {/* Árvores Derrubadas */}
               <div className="bg-gray-600 rounded-lg p-4">
                 <div className="text-2xl font-bold text-white">
-                  {simulationResults ? simulationResults.fallen_trees : '0'}
+                  {safeSimulationResults ? safeSimulationResults.fallen_trees : '0'}
                 </div>
                 <div className="text-sm text-gray-200">ÁRVORES DERRUBADAS</div>
               </div>
@@ -472,7 +541,7 @@ const AsteroidDashboard = () => {
               {/* Frequência */}
               <div className="bg-blue-600 rounded-lg p-4">
                 <div className="text-lg font-bold text-white">
-                  {simulationResults ? simulationResults.frequency : 'N/A'}
+                  {safeSimulationResults ? safeSimulationResults.frequency : 'N/A'}
                   </div>
                 <div className="text-sm text-blue-200">FREQUÊNCIA</div>
                 <div className="text-xs text-blue-300 mt-1">Eventos similares</div>
@@ -484,7 +553,7 @@ const AsteroidDashboard = () => {
               <h3 className="text-lg font-semibold text-white mb-4">Zona de Impacto Global</h3>
               
               <div className="bg-blue-900 rounded-lg overflow-hidden" style={{ height: '400px' }}>
-                {simulationResults ? (
+                {safeSimulationResults ? (
                   <MapContainer
                     center={[latitude, longitude]}
                     zoom={10}
@@ -501,8 +570,14 @@ const AsteroidDashboard = () => {
                       <Popup>
                     <div className="text-center">
                           <h3 className="font-bold text-red-600">PONTO DE IMPACTO</h3>
-                          <p className="text-sm">Energia: {simulationResults.impact_energy_mt} MT</p>
-                          <p className="text-sm">Cratera: {simulationResults.crater_diameter_km} km</p>
+                          <p className="text-sm">Energia: {safeSimulationResults.impact_energy_mt} MT</p>
+                          <p className="text-sm">
+                            {safeSimulationResults && safeSimulationResults.impact_type ? (
+                              safeSimulationResults.impact_type === 'AIRBURST' 
+                                ? 'Airburst - Sem cratera' 
+                                : `Cratera: ${safeSimulationResults.crater_diameter_km} km`
+                            ) : 'Cratera: 0 km'}
+                          </p>
                     </div>
                       </Popup>
                     </Marker>
@@ -510,23 +585,27 @@ const AsteroidDashboard = () => {
                     {/* Zona de Bola de Fogo */}
                     <Circle
                       center={[latitude, longitude]}
-                      radius={simulationResults.fireball_radius_km * 1000}
+                      radius={safeSimulationResults.fireball_radius_km * 1000}
                       pathOptions={{ color: 'red', fillColor: 'red', fillOpacity: 0.3 }}
                     />
                     
-                    {/* Zona de Destruição */}
-                    <Circle
-                      center={[latitude, longitude]}
-                      radius={simulationResults.crater_diameter_km * 1000}
-                      pathOptions={{ color: 'orange', fillColor: 'orange', fillOpacity: 0.2 }}
-                    />
+                    {/* Zona de Destruição - apenas para impactos diretos */}
+                    {safeSimulationResults && safeSimulationResults.impact_type && safeSimulationResults.impact_type !== 'AIRBURST' && (
+                      <Circle
+                        center={[latitude, longitude]}
+                        radius={safeSimulationResults.crater_diameter_km * 1000}
+                        pathOptions={{ color: 'orange', fillColor: 'orange', fillOpacity: 0.2 }}
+                      />
+                    )}
                     
-                    {/* Zona de Tsunami */}
-                    <Circle
-                      center={[latitude, longitude]}
-                      radius={simulationResults.crater_diameter_km * 2000}
-                      pathOptions={{ color: 'blue', fillColor: 'blue', fillOpacity: 0.1 }}
-                    />
+                    {/* Zona de Tsunami - apenas para impactos diretos */}
+                    {safeSimulationResults && safeSimulationResults.impact_type && safeSimulationResults.impact_type !== 'AIRBURST' && (
+                      <Circle
+                        center={[latitude, longitude]}
+                        radius={safeSimulationResults.crater_diameter_km * 2000}
+                        pathOptions={{ color: 'blue', fillColor: 'blue', fillOpacity: 0.1 }}
+                      />
+                    )}
                   </MapContainer>
                 ) : (
                   <div className="flex items-center justify-center h-full">
@@ -542,8 +621,18 @@ const AsteroidDashboard = () => {
                       
                       <div className="space-y-2 text-sm text-blue-300">
                         <div>• Bola de Fogo - Ignição instantânea (&gt;1000°C)</div>
-                        <div>• Zona de Destruição - Raio da cratera + devastação total</div>
-                        <div>• Zona de Tsunami - Área costeira de risco</div>
+                        {safeSimulationResults && safeSimulationResults.impact_type ? (
+                          safeSimulationResults.impact_type === 'AIRBURST' ? (
+                            <div>• Airburst - Explosão atmosférica sem cratera</div>
+                          ) : (
+                            <>
+                              <div>• Zona de Destruição - Raio da cratera + devastação total</div>
+                              <div>• Zona de Tsunami - Área costeira de risco</div>
+                            </>
+                          )
+                        ) : (
+                          <div>• Zona de Destruição - Raio da cratera + devastação total</div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -551,20 +640,30 @@ const AsteroidDashboard = () => {
             </div>
 
               {/* Legenda do Mapa */}
-              {simulationResults && (
+              {safeSimulationResults && (
                 <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
                   <div className="flex items-center">
                     <div className="w-4 h-4 bg-red-500 rounded-full mr-2"></div>
-                    <span className="text-blue-200">Bola de Fogo ({simulationResults.fireball_radius_km} km)</span>
+                    <span className="text-blue-200">Bola de Fogo ({safeSimulationResults.fireball_radius_km} km)</span>
                       </div>
-                  <div className="flex items-center">
-                    <div className="w-4 h-4 bg-orange-500 rounded-full mr-2"></div>
-                    <span className="text-blue-200">Destruição ({simulationResults.crater_diameter_km} km)</span>
-                        </div>
-                  <div className="flex items-center">
-                    <div className="w-4 h-4 bg-blue-500 rounded-full mr-2"></div>
-                    <span className="text-blue-200">Tsunami ({simulationResults.crater_diameter_km * 2} km)</span>
+                  {safeSimulationResults && safeSimulationResults.impact_type && safeSimulationResults.impact_type !== 'AIRBURST' && (
+                    <>
+                      <div className="flex items-center">
+                        <div className="w-4 h-4 bg-orange-500 rounded-full mr-2"></div>
+                        <span className="text-blue-200">Destruição ({safeSimulationResults.crater_diameter_km} km)</span>
                       </div>
+                      <div className="flex items-center">
+                        <div className="w-4 h-4 bg-blue-500 rounded-full mr-2"></div>
+                        <span className="text-blue-200">Tsunami ({safeSimulationResults.crater_diameter_km * 2} km)</span>
+                      </div>
+                    </>
+                  )}
+                  {safeSimulationResults && safeSimulationResults.impact_type && safeSimulationResults.impact_type === 'AIRBURST' && (
+                    <div className="flex items-center">
+                      <div className="w-4 h-4 bg-yellow-500 rounded-full mr-2"></div>
+                      <span className="text-blue-200">Airburst - Sem cratera</span>
+                    </div>
+                  )}
                     </div>
               )}
               </div>

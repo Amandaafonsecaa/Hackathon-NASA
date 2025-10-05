@@ -1,9 +1,11 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import requests
 import json
 from typing import Dict, Any, List, Optional
 import time
+from services import physics_service
 
 app = FastAPI(
     title="COSMOS SENTINEL API",
@@ -11,8 +13,41 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Configurar CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://127.0.0.1:3001"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Endpoints básicos que funcionam sem dependências complexas
 
+from pydantic import BaseModel
+from typing import Literal
+
+class SimulationInput(BaseModel):
+    diameter_m: float
+    velocity_kms: float
+    impact_angle_deg: float
+    target_type: Literal["solo", "rocha", "oceano"]
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+@app.post("/api/v1/simular", tags=["Simulação Real"])
+def simulate_impact(input_data: SimulationInput):
+    """Simulação real de impacto usando physics_service"""
+    try:
+        full_report = physics_service.calculate_all_impact_effects(
+            diameter_m=input_data.diameter_m,
+            velocity_kms=input_data.velocity_kms,
+            impact_angle_deg=input_data.impact_angle_deg,
+            tipo_terreno=input_data.target_type
+        )
+        return full_report
+    except Exception as e:
+        return {"error": f"Erro na simulação: {str(e)}"}
 
 @app.get("/", tags=["Root"])
 def read_root():

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script para iniciar o COSMOS SENTINEL completo (Backend + Frontend)
+Script simplificado para iniciar COSMOS SENTINEL (sem instalação automática)
 """
 
 import subprocess
@@ -8,50 +8,7 @@ import time
 import webbrowser
 import os
 import sys
-import threading
 import requests
-
-def install_backend_dependencies():
-    """Instala dependências do backend"""
-    print("[INFO] Instalando dependências do backend...")
-    try:
-        os.chdir('backend')
-        result = subprocess.run([
-            sys.executable, "-m", "pip", "install", "-r", "requirements.txt"
-        ], capture_output=True, text=True)
-        
-        if result.returncode == 0:
-            print("[OK] Dependências do backend instaladas!")
-            return True
-        else:
-            print(f"[ERRO] Erro ao instalar dependências: {result.stderr}")
-            return False
-    except Exception as e:
-        print(f"[ERRO] Erro ao instalar dependências: {e}")
-        return False
-    finally:
-        os.chdir('..')
-
-def install_frontend_dependencies():
-    """Instala dependências do frontend"""
-    print("[INFO] Instalando dependências do frontend...")
-    try:
-        os.chdir('frontend')
-        result = subprocess.run([
-            "cmd", "/c", "npm", "install"
-        ], capture_output=True, text=True)
-        
-        if result.returncode == 0:
-            print("[OK] Dependências do frontend instaladas!")
-            return True
-        else:
-            print(f"[ERRO] Erro ao instalar dependências: {result.stderr}")
-            return False
-    except Exception as e:
-        print(f"[ERRO] Erro ao instalar dependências: {e}")
-        return False
-    finally:
-        os.chdir('..')
 
 def start_backend():
     """Inicia o servidor backend"""
@@ -66,7 +23,7 @@ def start_backend():
         # Iniciar servidor backend
         process = subprocess.Popen([
             sys.executable, "-m", "uvicorn", 
-            "main_simple:app", 
+            "main:app", 
             "--host", "0.0.0.0", 
             "--port", "8000"
         ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -128,23 +85,15 @@ def main():
     print("=" * 60)
     
     # Verificar estrutura de diretórios
-    if not os.path.exists("backend/main_simple.py"):
-        print("[ERRO] Arquivo main_simple.py não encontrado no backend!")
+    if not os.path.exists("backend/main.py"):
+        print("[ERRO] Arquivo main.py não encontrado no backend!")
         return False
     
     if not os.path.exists("frontend/public/index.html"):
         print("[ERRO] Arquivo index.html não encontrado no frontend!")
         return False
     
-    # Instalar dependências
-    print("\n[INFO] Instalando dependências...")
-    if not install_backend_dependencies():
-        print("[ERRO] Falha ao instalar dependências do backend")
-        return False
-    
-    if not install_frontend_dependencies():
-        print("[ERRO] Falha ao instalar dependências do frontend")
-        return False
+    print("[INFO] Arquivos encontrados! Iniciando serviços...")
     
     # Iniciar backend
     backend_process = start_backend()
