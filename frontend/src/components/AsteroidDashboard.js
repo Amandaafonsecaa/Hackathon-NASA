@@ -322,17 +322,17 @@ function AsteroidDashboard() {
 
       {/* Layout Principal */}
       <div className="pt-20 flex h-screen">
-        {/* Painel Lateral */}
+        {/* Painel Lateral - Responsivo */}
         <aside className={`w-80 border-r transition-colors duration-300 ${
           darkMode 
             ? 'bg-gray-800 border-gray-700' 
             : 'bg-white border-gray-200'
-        }`}>
-          <div className="p-6">
+        } hidden lg:block`}>
+          <div className="p-6 h-full flex flex-col overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200 dark:scrollbar-thumb-gray-600 dark:scrollbar-track-gray-800">
             <h2 className="text-lg font-semibold mb-6">Filtros e Controles</h2>
             
             {/* Filtros */}
-            <div className="space-y-6">
+            <div className="space-y-6 flex-1">
               <div>
                 <label className="block text-sm font-medium mb-2">Severidade</label>
                 <select
@@ -423,7 +423,7 @@ function AsteroidDashboard() {
         </aside>
 
         {/* Área Principal */}
-        <main className="flex-1 flex">
+        <main className="flex-1 flex flex-col lg:flex-row">
           {/* Mapa */}
           <div className={`flex-1 transition-all duration-300 ${
             isFullscreen ? 'fixed inset-0 z-40' : 'relative'
@@ -530,52 +530,54 @@ function AsteroidDashboard() {
             </div>
           </div>
 
-          {/* Painel de Alertas */}
-          <aside className={`w-80 border-l transition-colors duration-300 ${
+          {/* Painel de Alertas - Responsivo */}
+          <aside className={`w-full lg:w-80 border-l transition-colors duration-300 ${
             darkMode 
               ? 'bg-gray-800 border-gray-700' 
               : 'bg-white border-gray-200'
           }`}>
-            <div className="p-6">
+            <div className="p-6 h-full flex flex-col">
               <h2 className="text-lg font-semibold mb-6">Alertas Recentes</h2>
               
-              <div className="space-y-4">
-                {filteredAlerts.length === 0 ? (
-                  <div className="text-center py-8 opacity-60">
-                    <div className="text-4xl mb-2">🔔</div>
-                    <p>Nenhum alerta encontrado</p>
-                  </div>
-                ) : (
-                  filteredAlerts.map(alert => (
-                    <div
-                      key={alert.id}
-                      className={`p-4 rounded-lg border transition-colors ${
-                        alert.severity === 'critical' 
-                          ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
-                          : alert.severity === 'high'
-                          ? 'bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800'
-                          : 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className={`px-2 py-1 rounded text-xs font-medium ${
-                          alert.severity === 'critical' 
-                            ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
-                            : alert.severity === 'high'
-                            ? 'bg-orange-100 text-orange-800 dark:bg-orange-800 dark:text-orange-100'
-                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100'
-                        }`}>
-                          {alert.severity.toUpperCase()}
-                        </div>
-                        <span className="text-xs opacity-60">
-                          {alert.timestamp.toLocaleTimeString()}
-                        </span>
-                      </div>
-                      <p className="text-sm font-medium mb-1">{alert.message}</p>
-                      <p className="text-xs opacity-60">{alert.location}</p>
+              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200 dark:scrollbar-thumb-gray-600 dark:scrollbar-track-gray-800">
+                <div className="space-y-4 pr-2">
+                  {filteredAlerts.length === 0 ? (
+                    <div className="text-center py-8 opacity-60">
+                      <div className="text-4xl mb-2">🔔</div>
+                      <p>Nenhum alerta encontrado</p>
                     </div>
-                  ))
-                )}
+                  ) : (
+                    filteredAlerts.map(alert => (
+                      <div
+                        key={alert.id}
+                        className={`p-4 rounded-lg border transition-colors hover:shadow-md ${
+                          alert.severity === 'critical' 
+                            ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
+                            : alert.severity === 'high'
+                            ? 'bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800'
+                            : 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className={`px-2 py-1 rounded text-xs font-medium ${
+                            alert.severity === 'critical' 
+                              ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
+                              : alert.severity === 'high'
+                              ? 'bg-orange-100 text-orange-800 dark:bg-orange-800 dark:text-orange-100'
+                              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100'
+                          }`}>
+                            {alert.severity.toUpperCase()}
+                          </div>
+                          <span className="text-xs opacity-60">
+                            {alert.timestamp.toLocaleTimeString()}
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium mb-1">{alert.message}</p>
+                        <p className="text-xs opacity-60">{alert.location}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           </aside>
