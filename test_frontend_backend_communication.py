@@ -9,7 +9,7 @@ import time
 
 def test_backend_endpoints():
     """Testa todos os endpoints do backend"""
-    base_url = "http://localhost:8000"
+    base_url = "http://localhost:8001"
     
     print("TESTANDO COMUNICACAO FRONTEND <-> BACKEND")
     print("=" * 60)
@@ -63,7 +63,7 @@ def test_frontend_api_calls():
     print("\nSIMULANDO CHAMADAS DO FRONTEND")
     print("=" * 60)
     
-    base_url = "http://localhost:8000/api/v1"
+    base_url = "http://localhost:8001/api/v1"
     
     # Simular chamadas que o frontend faz
     frontend_calls = [
@@ -127,7 +127,7 @@ def check_cors_headers():
             'Access-Control-Request-Headers': 'Content-Type'
         }
         
-        response = requests.options("http://localhost:8000/health", headers=headers)
+        response = requests.options("http://localhost:8001/health", headers=headers)
         
         print(f"Status OPTIONS: {response.status_code}")
         print("Headers CORS:")
@@ -150,7 +150,7 @@ def main():
     
     # Verificar se o backend está rodando
     try:
-        response = requests.get("http://localhost:8000/health", timeout=2)
+        response = requests.get("http://localhost:8001/health", timeout=2)
         if response.status_code == 200:
             print("✅ Backend está rodando")
         else:
@@ -158,7 +158,7 @@ def main():
             return
     except:
         print("❌ Backend não está acessível")
-        print("   Certifique-se de que o backend está rodando em http://localhost:8000")
+        print("   Certifique-se de que o backend está rodando em http://localhost:8001")
         return
     
     # Executar testes

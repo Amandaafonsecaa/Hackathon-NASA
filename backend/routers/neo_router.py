@@ -36,6 +36,71 @@ def get_enhanced_asteroid_data(asteroid_id: str):
         raise HTTPException(status_code=404, detail=f"Dados completos para asteroide {asteroid_id} não encontrados.")
     return data
 
+@router.get("/near-earth", summary="Listar asteroides próximos à Terra")
+def get_near_earth_asteroids(
+    start_date: str = Query(..., description="Data inicial (YYYY-MM-DD)"),
+    end_date: str = Query(..., description="Data final (YYYY-MM-DD)"),
+    limit: int = Query(default=20, description="Número máximo de resultados")
+):
+    """
+    Lista asteroides próximos à Terra em um período específico.
+    """
+    try:
+        import requests
+        from datetime import datetime
+        
+        # Validar formato das datas
+        try:
+            datetime.strptime(start_date, '%Y-%m-%d')
+            datetime.strptime(end_date, '%Y-%m-%d')
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de data inválido. Use YYYY-MM-DD")
+        
+        # Buscar dados via NASA NeoWs API
+        api_key = getattr(settings, 'NASA_API_KEY', 'DEMO_KEY')
+        url = f"https://api.nasa.gov/neo/rest/v1/feed"
+        params = {
+            "start_date": start_date,
+            "end_date": end_date,
+            "api_key": api_key
+        }
+        
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Processar dados e extrair asteroides
+        asteroids = []
+        for date, asteroids_data in data.get("near_earth_objects", {}).items():
+            for asteroid in asteroids_data[:limit]:
+                asteroids.append({
+                    "id": asteroid.get("neo_reference_id"),
+                    "name": asteroid.get("name"),
+                    "is_potentially_hazardous": asteroid.get("is_potentially_hazardous_asteroid", False),
+                    "estimated_diameter": asteroid.get("estimated_diameter", {}),
+                    "close_approach_data": asteroid.get("close_approach_data", [{}])[0],
+                    "orbital_data": asteroid.get("orbital_data", {}),
+                    "date": date
+                })
+        
+        return {
+            "success": True,
+            "data": {
+                "asteroids": asteroids[:limit],
+                "total_count": len(asteroids),
+                "date_range": {
+                    "start": start_date,
+                    "end": end_date
+                },
+                "source": "NASA NeoWs API"
+            }
+        }
+        
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar dados da NASA: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+
 @router.get("/{asteroid_id}/impact-analysis", summary="Análise de impacto baseada em dados reais")
 def get_asteroid_impact_analysis(
     asteroid_id: str,

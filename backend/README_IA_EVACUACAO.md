@@ -144,7 +144,7 @@ GET /api/v1/traffic-ai/status
 #### WebSocket em Tempo Real
 ```http
 # Conectar ao WebSocket
-ws://localhost:8000/api/v1/ws/traffic?client_id=my_client
+ws://localhost:8001/api/v1/ws/traffic?client_id=my_client
 
 # Tipos de mensagem:
 # - traffic_updates: Dados gerais de tráfego
@@ -228,7 +228,7 @@ pip install -r requirements.txt
 
 ### Executar Servidor
 ```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn main:app --reload --host 0.0.0.0 --port 8001
 ```
 
 ### Testar Sistema
@@ -240,7 +240,7 @@ python examples/evacuation_ai_example.py
 
 ### Conectar
 ```javascript
-const ws = new WebSocket('ws://localhost:8000/api/v1/ws/traffic?client_id=my_client');
+const ws = new WebSocket('ws://localhost:8001/api/v1/ws/traffic?client_id=my_client');
 
 ws.onopen = function() {
     // Inscrever em atualizações
@@ -271,7 +271,7 @@ ws.onmessage = function(event) {
 import requests
 
 # 1. Executar análise completa
-response = requests.post('http://localhost:8000/api/v1/evacuation-ai/analyze', json={
+response = requests.post('http://localhost:8001/api/v1/evacuation-ai/analyze', json={
     "impact_latitude": -23.5505,
     "impact_longitude": -46.6333,
     "asteroid_diameter_m": 500,
@@ -284,10 +284,10 @@ response = requests.post('http://localhost:8000/api/v1/evacuation-ai/analyze', j
 scenario_id = response.json()['scenario_id']
 
 # 2. Verificar status
-status = requests.get(f'http://localhost:8000/api/v1/evacuation-ai/scenario/{scenario_id}/status')
+status = requests.get(f'http://localhost:8001/api/v1/evacuation-ai/scenario/{scenario_id}/status')
 
 # 3. Atualizar cenário em tempo real
-requests.post('http://localhost:8000/api/v1/evacuation-ai/update-scenario', json={
+requests.post('http://localhost:8001/api/v1/evacuation-ai/update-scenario', json={
     "scenario_id": scenario_id,
     "weather_update": {"hour": 18, "rainfall": 5, "visibility": 4},
     "traffic_incidents": [{"type": "accident", "severity": "medium"}]
@@ -332,7 +332,7 @@ requests.post('http://localhost:8000/api/v1/evacuation-ai/update-scenario', json
 ## 📞 Suporte
 
 Para dúvidas técnicas ou sugestões, consulte:
-- Documentação da API: `http://localhost:8000/docs`
+- Documentação da API: `http://localhost:8001/docs`
 - Exemplos: `examples/evacuation_ai_example.py`
 - Logs: Verifique console do servidor
 

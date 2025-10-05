@@ -6,6 +6,7 @@ import json
 from typing import Dict, Any, List, Optional
 import time
 from services import physics_service
+from routers import report_router
 
 app = FastAPI(
     title="COSMOS SENTINEL API",
@@ -21,6 +22,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Incluir routers
+app.include_router(report_router.router, prefix="/api/v1/relatorios", tags=["Relatórios Executivos"])
 
 # Endpoints básicos que funcionam sem dependências complexas
 
@@ -58,6 +62,182 @@ def read_root():
 def health_check():
     return {"status": "healthy", "timestamp": time.time()}
 
+
+# ===== ENDPOINTS DE NEOs (NASA) =====
+
+# Dados simulados de asteroides famosos para demonstração
+FAMOUS_ASTEROIDS = {
+    "2000433": {
+        "name": "Eros (433 Eros)",
+        "diameter_km": 16.84,
+        "is_potentially_hazardous": False,
+        "classification": "Amor",
+        "discovery_year": 1898,
+        "description": "Primeiro asteroide próximo à Terra descoberto"
+    },
+    "99942": {
+        "name": "Apophis (99942 Apophis)",
+        "diameter_km": 0.37,
+        "is_potentially_hazardous": True,
+        "classification": "Aten",
+        "discovery_year": 2004,
+        "description": "Asteroide potencialmente perigoso"
+    },
+    "25143": {
+        "name": "Itokawa (25143 Itokawa)",
+        "diameter_km": 0.535,
+        "is_potentially_hazardous": False,
+        "classification": "Apollo",
+        "discovery_year": 1998,
+        "description": "Asteroide visitado pela sonda Hayabusa"
+    },
+    "162173": {
+        "name": "Ryugu (162173 Ryugu)",
+        "diameter_km": 0.9,
+        "is_potentially_hazardous": False,
+        "classification": "Apollo",
+        "discovery_year": 1999,
+        "description": "Asteroide visitado pela sonda Hayabusa2"
+    },
+    "101955": {
+        "name": "Bennu (101955 Bennu)",
+        "diameter_km": 0.49,
+        "is_potentially_hazardous": True,
+        "classification": "Apollo",
+        "discovery_year": 1999,
+        "description": "Asteroide visitado pela sonda OSIRIS-REx"
+    },
+    "65803": {
+        "name": "Didymos (65803 Didymos)",
+        "diameter_km": 0.78,
+        "is_potentially_hazardous": False,
+        "classification": "Apollo",
+        "discovery_year": 1996,
+        "description": "Asteroide alvo da missão DART"
+    }
+}
+
+@app.get("/api/v1/neo/{asteroid_id}", tags=["NASA NEOs"])
+def get_asteroid_data(asteroid_id: str):
+    """Busca dados básicos de um asteroide"""
+    try:
+        if asteroid_id in FAMOUS_ASTEROIDS:
+            asteroid_data = FAMOUS_ASTEROIDS[asteroid_id]
+            return {
+                "success": True,
+                "data": {
+                    "neo_reference_id": asteroid_id,
+                    "name": asteroid_data["name"],
+                    "is_potentially_hazardous_asteroid": asteroid_data["is_potentially_hazardous"],
+                    "estimated_diameter": {
+                        "meters": {
+                            "estimated_diameter_min": asteroid_data["diameter_km"] * 1000 * 0.9,
+                            "estimated_diameter_max": asteroid_data["diameter_km"] * 1000 * 1.1
+                        }
+                    },
+                    "orbital_data": {
+                        "orbit_class": asteroid_data["classification"],
+                        "discovery_date": f"{asteroid_data['discovery_year']}-01-01"
+                    }
+                }
+            }
+        else:
+            return {"success": False, "error": f"Asteroide com ID {asteroid_id} não encontrado na base de dados."}
+    except Exception as e:
+        return {"success": False, "error": f"Erro ao buscar asteroide: {str(e)}"}
+
+@app.get("/api/v1/neo/{asteroid_id}/enhanced", tags=["NASA NEOs"])
+def get_enhanced_asteroid_data(asteroid_id: str):
+    """Combina dados básicos e físicos de um asteroide"""
+    try:
+        if asteroid_id in FAMOUS_ASTEROIDS:
+            asteroid_data = FAMOUS_ASTEROIDS[asteroid_id]
+            diameter_m = asteroid_data["diameter_km"] * 1000
+            
+            return {
+                "success": True,
+                "data": {
+                    "basic_info": {
+                        "neo_reference_id": asteroid_id,
+                        "name": asteroid_data["name"],
+                        "is_potentially_hazardous_asteroid": asteroid_data["is_potentially_hazardous"],
+                        "estimated_diameter": {
+                            "meters": {
+                                "estimated_diameter_min": diameter_m * 0.9,
+                                "estimated_diameter_max": diameter_m * 1.1
+                            }
+                        },
+                        "orbital_data": {
+                            "orbit_class": asteroid_data["classification"],
+                            "discovery_date": f"{asteroid_data['discovery_year']}-01-01"
+                        }
+                    },
+                    "physical_data": {
+                        "diameter_km": asteroid_data["diameter_km"],
+                        "mass_kg": (diameter_m / 2) ** 3 * 3.14159 * 4/3 * 2000,  # Estimativa de massa
+                        "rotation_period_hours": 12.0,  # Estimativa
+                        "albedo": 0.15  # Estimativa típica
+                    },
+                    "classification": {
+                        "spktype": asteroid_data["classification"],
+                        "description": asteroid_data["description"]
+                    },
+                    "data_sources": {
+                        "neows": "NASA Near Earth Object Web Service (Simulado)",
+                        "sbdb": "JPL Small-Body Database (Simulado)"
+                    }
+                }
+            }
+        else:
+            return {"success": False, "error": f"Dados completos para asteroide {asteroid_id} não encontrados."}
+    except Exception as e:
+        return {"success": False, "error": f"Erro ao buscar dados completos: {str(e)}"}
+
+@app.get("/api/v1/neo/{asteroid_id}/impact-analysis", tags=["NASA NEOs"])
+def get_asteroid_impact_analysis(
+    asteroid_id: str,
+    impact_latitude: float = -3.7327,
+    impact_longitude: float = -38.5270,
+    impact_angle_deg: float = 45,
+    target_type: str = "rocha"
+):
+    """Análise de impacto baseada em dados de um asteroide"""
+    try:
+        if asteroid_id not in FAMOUS_ASTEROIDS:
+            return {"success": False, "error": f"Asteroide {asteroid_id} não encontrado."}
+        
+        asteroid_data = FAMOUS_ASTEROIDS[asteroid_id]
+        diameter_m = asteroid_data["diameter_km"] * 1000
+        
+        # Velocidade típica de impacto (17 km/s é uma média)
+        velocity_kms = 17.0
+        
+        # Executar simulação de impacto
+        impact_results = physics_service.calculate_all_impact_effects(
+            diameter_m=diameter_m,
+            velocity_kms=velocity_kms,
+            impact_angle_deg=impact_angle_deg,
+            tipo_terreno=target_type
+        )
+        
+        return {
+            "success": True,
+            "data": {
+                "asteroid_info": {
+                    "id": asteroid_id,
+                    "name": asteroid_data["name"],
+                    "diameter_m": diameter_m,
+                    "is_potentially_hazardous": asteroid_data["is_potentially_hazardous"],
+                    "classification": asteroid_data["classification"],
+                    "description": asteroid_data["description"]
+                },
+                "impact_simulation": impact_results,
+                "impact_coordinates": [impact_longitude, impact_latitude]
+            }
+        }
+        
+    except Exception as e:
+        return {"success": False, "error": f"Erro na análise de impacto: {str(e)}"}
 
 @app.get("/api/v1/neo/test", tags=["NASA NEOs"])
 def test_neo():
@@ -334,6 +514,339 @@ def predict_travel_time(prediction_data: Dict):
     except Exception as e:
         return {"success": False, "error": f"Erro na predição: {str(e)}"}
 
+# ===== ENDPOINTS DE SAFE ZONES =====
+
+class SafeZoneRequest(BaseModel):
+    impact_latitude: float
+    impact_longitude: float
+    diameter_m: float
+    velocity_kms: float
+    impact_angle_deg: float
+    target_type: Literal["solo", "rocha", "oceano"]
+    search_radius_km: float = 20.0
+    min_distance_km: float = 5.0
+
+@app.post("/api/v1/safe-zones/calculate", tags=["Safe Zones"])
+def calculate_safe_zones(request: SafeZoneRequest):
+    """Calcula pontos seguros automaticamente baseados na simulação"""
+    try:
+        # Executar simulação física
+        physics_results = physics_service.calculate_all_impact_effects(
+            diameter_m=request.diameter_m,
+            velocity_kms=request.velocity_kms,
+            impact_angle_deg=request.impact_angle_deg,
+            tipo_terreno=request.target_type
+        )
+        
+        # Calcular zonas de risco
+        impact_lat = request.impact_latitude
+        impact_lon = request.impact_longitude
+        
+        # Calcular raios de impacto
+        crater_radius = physics_results.get('crater_diameter_km', 0) / 2
+        fireball_radius = physics_results.get('fireball_radius_km', 0)
+        blast_radius = physics_results.get('blast_radius_km', 0)
+        
+        # Encontrar pontos seguros em diferentes direções
+        safe_zones = []
+        directions = [
+            {"name": "Norte", "lat_offset": 0.05, "lon_offset": 0},
+            {"name": "Sul", "lat_offset": -0.05, "lon_offset": 0},
+            {"name": "Leste", "lat_offset": 0, "lon_offset": 0.05},
+            {"name": "Oeste", "lat_offset": 0, "lon_offset": -0.05},
+            {"name": "Nordeste", "lat_offset": 0.035, "lon_offset": 0.035},
+            {"name": "Noroeste", "lat_offset": 0.035, "lon_offset": -0.035},
+            {"name": "Sudeste", "lat_offset": -0.035, "lon_offset": 0.035},
+            {"name": "Sudoeste", "lat_offset": -0.035, "lon_offset": -0.035}
+        ]
+        
+        for direction in directions:
+            safe_lat = impact_lat + direction["lat_offset"]
+            safe_lon = impact_lon + direction["lon_offset"]
+            
+            # Calcular distância do ponto de impacto
+            distance_km = ((safe_lat - impact_lat) ** 2 + (safe_lon - impact_lon) ** 2) ** 0.5 * 111
+            
+            # Verificar se está fora das zonas de risco
+            is_safe = (
+                distance_km > max(crater_radius, fireball_radius, blast_radius) + request.min_distance_km
+            )
+            
+            if is_safe:
+                safe_zones.append({
+                    "name": f"Zona Segura {direction['name']}",
+                    "latitude": safe_lat,
+                    "longitude": safe_lon,
+                    "distance_from_impact_km": round(distance_km, 2),
+                    "safety_score": min(1.0, distance_km / (max(crater_radius, fireball_radius, blast_radius) + 5)),
+                    "capacity": int(5000 * (distance_km / 20)),  # Capacidade baseada na distância
+                    "color": "#10B981" if distance_km > 15 else "#F59E0B" if distance_km > 10 else "#EF4444"
+                })
+        
+        return {
+            "success": True,
+            "message": f"{len(safe_zones)} zonas seguras encontradas",
+            "data": {
+                "impact_coordinates": [impact_lon, impact_lat],
+                "impact_radii": {
+                    "crater_km": crater_radius,
+                    "fireball_km": fireball_radius,
+                    "blast_km": blast_radius
+                },
+                "safe_zones": safe_zones,
+                "search_radius_km": request.search_radius_km,
+                "min_distance_km": request.min_distance_km
+            }
+        }
+        
+    except Exception as e:
+        return {"success": False, "error": f"Erro ao calcular zonas seguras: {str(e)}"}
+
+class OptimalRouteRequest(BaseModel):
+    impact_latitude: float
+    impact_longitude: float
+    safe_zones: List[Dict]
+    diameter_m: float
+    velocity_kms: float
+    impact_angle_deg: float
+    target_type: Literal["solo", "rocha", "oceano"]
+    algorithm: Literal["astar", "dijkstra", "simple"] = "astar"
+
+@app.post("/api/v1/routes/optimal-paths", tags=["Safe Zones"])
+def calculate_optimal_paths(request: OptimalRouteRequest):
+    """Calcula os melhores caminhos do ponto de impacto para cada safe zone"""
+    try:
+        import math
+        
+        # Executar simulação física para obter zonas de risco
+        physics_results = physics_service.calculate_all_impact_effects(
+            diameter_m=request.diameter_m,
+            velocity_kms=request.velocity_kms,
+            impact_angle_deg=request.impact_angle_deg,
+            tipo_terreno=request.target_type
+        )
+        
+        impact_lat = request.impact_latitude
+        impact_lon = request.impact_longitude
+        
+        # Calcular zonas de risco
+        crater_radius = physics_results.get('crater_diameter_km', 0) / 2
+        fireball_radius = physics_results.get('fireball_radius_km', 0)
+        blast_radius = physics_results.get('blast_radius_km', 0)
+        
+        optimal_routes = []
+        
+        for zone in request.safe_zones:
+            zone_lat = zone.get('latitude')
+            zone_lon = zone.get('longitude')
+            
+            if not zone_lat or not zone_lon:
+                continue
+                
+            # Calcular rota otimizada usando algoritmo escolhido
+            if request.algorithm == "astar":
+                route_coords = _calculate_astar_route(
+                    impact_lat, impact_lon, zone_lat, zone_lon,
+                    crater_radius, fireball_radius, blast_radius
+                )
+            elif request.algorithm == "dijkstra":
+                route_coords = _calculate_dijkstra_route(
+                    impact_lat, impact_lon, zone_lat, zone_lon,
+                    crater_radius, fireball_radius, blast_radius
+                )
+            else:  # simple
+                route_coords = _calculate_simple_route(
+                    impact_lat, impact_lon, zone_lat, zone_lon,
+                    crater_radius, fireball_radius, blast_radius
+                )
+            
+            # Calcular métricas da rota
+            total_distance = _calculate_route_distance(route_coords)
+            estimated_time = _estimate_travel_time(total_distance, route_coords)
+            safety_score = _calculate_route_safety(route_coords, crater_radius, fireball_radius, blast_radius)
+            
+            optimal_routes.append({
+                "zone_id": zone.get('name', 'Unknown'),
+                "zone_name": zone.get('name', 'Unknown'),
+                "zone_coordinates": [zone_lon, zone_lat],
+                "route_coordinates": route_coords,
+                "total_distance_km": round(total_distance, 2),
+                "estimated_time_minutes": round(estimated_time, 1),
+                "safety_score": round(safety_score, 2),
+                "waypoints_count": len(route_coords),
+                "color": zone.get('color', '#3B82F6'),
+                "algorithm_used": request.algorithm
+            })
+        
+        # Ordenar por score de segurança (mais seguro primeiro)
+        optimal_routes.sort(key=lambda x: x['safety_score'], reverse=True)
+        
+        return {
+            "success": True,
+            "message": f"{len(optimal_routes)} rotas otimizadas calculadas",
+            "data": {
+                "impact_coordinates": [impact_lon, impact_lat],
+                "algorithm_used": request.algorithm,
+                "routes": optimal_routes,
+                "summary": {
+                    "total_routes": len(optimal_routes),
+                    "avg_distance_km": round(sum(r['total_distance_km'] for r in optimal_routes) / len(optimal_routes), 2) if optimal_routes else 0,
+                    "avg_safety_score": round(sum(r['safety_score'] for r in optimal_routes) / len(optimal_routes), 2) if optimal_routes else 0
+                }
+            }
+        }
+        
+    except Exception as e:
+        return {"success": False, "error": f"Erro ao calcular rotas otimizadas: {str(e)}"}
+
+def _calculate_astar_route(start_lat, start_lon, end_lat, end_lon, crater_radius, fireball_radius, blast_radius):
+    """Implementa algoritmo A* para encontrar rota ótima evitando zonas de risco"""
+    # Implementação simplificada do A*
+    waypoints = []
+    
+    # Dividir a rota em segmentos menores
+    num_segments = max(5, int(_calculate_distance_km(start_lat, start_lon, end_lat, end_lon) * 2))
+    
+    for i in range(num_segments + 1):
+        t = i / num_segments
+        
+        # Interpolação linear básica
+        lat = start_lat + t * (end_lat - start_lat)
+        lon = start_lon + t * (end_lon - start_lon)
+        
+        # Verificar se está em zona de risco e desviar se necessário
+        distance_from_impact = _calculate_distance_km(start_lat, start_lon, lat, lon)
+        
+        if distance_from_impact < max(crater_radius, fireball_radius, blast_radius) + 2:
+            # Desviar perpendicularmente
+            lat_offset = (end_lat - start_lat) * 0.1
+            lon_offset = (end_lon - start_lon) * 0.1
+            
+            # Alternar direção do desvio
+            if i % 2 == 0:
+                lat += lat_offset
+                lon += lon_offset
+            else:
+                lat -= lat_offset
+                lon -= lon_offset
+        
+        waypoints.append([lon, lat])
+    
+    return waypoints
+
+def _calculate_dijkstra_route(start_lat, start_lon, end_lat, end_lon, crater_radius, fireball_radius, blast_radius):
+    """Implementa algoritmo Dijkstra simplificado"""
+    # Implementação simplificada do Dijkstra
+    waypoints = []
+    
+    # Criar grade de pontos
+    num_points = 10
+    for i in range(num_points + 1):
+        t = i / num_points
+        
+        lat = start_lat + t * (end_lat - start_lat)
+        lon = start_lon + t * (end_lon - start_lon)
+        
+        # Aplicar desvio baseado no custo (distância das zonas de risco)
+        risk_distance = _calculate_distance_km(start_lat, start_lon, lat, lon)
+        
+        if risk_distance < max(crater_radius, fireball_radius, blast_radius) + 1:
+            # Calcular desvio ótimo
+            angle = math.atan2(end_lon - start_lon, end_lat - start_lat)
+            perpendicular_angle = angle + math.pi / 2
+            
+            # Aplicar desvio perpendicular
+            deviation = 0.01  # ~1km
+            lat += deviation * math.cos(perpendicular_angle)
+            lon += deviation * math.sin(perpendicular_angle)
+        
+        waypoints.append([lon, lat])
+    
+    return waypoints
+
+def _calculate_simple_route(start_lat, start_lon, end_lat, end_lon, crater_radius, fireball_radius, blast_radius):
+    """Implementa rota simples com desvio básico"""
+    waypoints = []
+    
+    # Rota direta com alguns waypoints
+    num_waypoints = 5
+    for i in range(num_waypoints + 1):
+        t = i / num_waypoints
+        
+        lat = start_lat + t * (end_lat - start_lat)
+        lon = start_lon + t * (end_lon - start_lon)
+        
+        # Desvio simples se estiver muito próximo do impacto
+        distance_from_impact = _calculate_distance_km(start_lat, start_lon, lat, lon)
+        
+        if distance_from_impact < max(crater_radius, fireball_radius, blast_radius) + 1:
+            # Desvio circular simples
+            angle_offset = math.pi / 4  # 45 graus
+            lat += 0.005 * math.cos(angle_offset)
+            lon += 0.005 * math.sin(angle_offset)
+        
+        waypoints.append([lon, lat])
+    
+    return waypoints
+
+def _calculate_distance_km(lat1, lon1, lat2, lon2):
+    """Calcula distância em km entre dois pontos"""
+    R = 6371  # Raio da Terra em km
+    
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    
+    a = (math.sin(dlat/2) * math.sin(dlat/2) + 
+         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * 
+         math.sin(dlon/2) * math.sin(dlon/2))
+    
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return R * c
+
+def _calculate_route_distance(route_coords):
+    """Calcula distância total de uma rota"""
+    total_distance = 0.0
+    
+    for i in range(len(route_coords) - 1):
+        lon1, lat1 = route_coords[i]
+        lon2, lat2 = route_coords[i + 1]
+        distance = _calculate_distance_km(lat1, lon1, lat2, lon2)
+        total_distance += distance
+    
+    return total_distance
+
+def _estimate_travel_time(distance_km, route_coords):
+    """Estima tempo de viagem baseado na distância e complexidade da rota"""
+    # Velocidade média considerando evacuação: 30 km/h
+    base_speed_kmh = 30
+    
+    # Penalidade por complexidade da rota (mais waypoints = mais lento)
+    complexity_factor = 1 + (len(route_coords) - 2) * 0.1
+    
+    # Calcular tempo em minutos
+    time_hours = distance_km / (base_speed_kmh / complexity_factor)
+    return time_hours * 60
+
+def _calculate_route_safety(route_coords, crater_radius, fireball_radius, blast_radius):
+    """Calcula score de segurança da rota (0-1, onde 1 é mais seguro)"""
+    if not route_coords:
+        return 0.0
+    
+    safe_points = 0
+    total_points = len(route_coords)
+    
+    for coord in route_coords:
+        lon, lat = coord
+        
+        # Calcular distância do ponto de impacto (assumindo impacto em 0,0 para simplificar)
+        distance_from_impact = math.sqrt(lat**2 + lon**2) * 111  # Aproximação
+        
+        # Verificar se está fora das zonas de risco
+        if distance_from_impact > max(crater_radius, fireball_radius, blast_radius) + 2:
+            safe_points += 1
+    
+    return safe_points / total_points
+
 
 @app.get("/api/v1/evacuation-ai/test", tags=["IA Integrada"])
 def test_integrated_ai():
@@ -386,4 +899,4 @@ def test_all_services():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

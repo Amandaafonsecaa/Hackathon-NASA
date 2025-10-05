@@ -4,6 +4,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { cosmosAPI } from '../services/apiService';
 import AIRouteOptimizer from './AIRouteOptimizer';
+import NEOAsteroidSearch from './NEOAsteroidSearch';
+import ScientificReport from './ScientificReport';
 
 // Ícones do Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -24,6 +26,25 @@ function MapController({ isFullscreen, simulationData }) {
   }, [isFullscreen, map]);
 
   // Remover zoom automático que estava causando problemas
+  return null;
+}
+
+// Componente para capturar cliques no mapa
+function MapClickHandler({ onMapClick }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    const handleClick = (e) => {
+      onMapClick(e);
+    };
+    
+    map.on('click', handleClick);
+    
+    return () => {
+      map.off('click', handleClick);
+    };
+  }, [map, onMapClick]);
+  
   return null;
 }
 
@@ -54,16 +75,18 @@ function Clock() {
 // Componente principal
 function AsteroidDashboard() {
   // Estados principais
-  const [darkMode, setDarkMode] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [apiStatus, setApiStatus] = useState('connecting');
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [darkMode, setDarkMode] = useState(false);
   
   // Estados de simulação
   const [simulationData, setSimulationData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
   const [aiOptimizedRoutes, setAiOptimizedRoutes] = useState([]);
+  const [safeZones, setSafeZones] = useState([]);
+  const [optimalRoutes, setOptimalRoutes] = useState([]);
   
   // Estados de filtros
   const [severityFilter, setSeverityFilter] = useState('all');
@@ -85,10 +108,28 @@ function AsteroidDashboard() {
   const [alertCounter, setAlertCounter] = useState(0);
   
   // Estados de evacuação
-  const [safeZones, setSafeZones] = useState([]);
   const [dangerZones, setDangerZones] = useState([]);
   const [evacuationRoutes, setEvacuationRoutes] = useState([]);
   const [shelters, setShelters] = useState([]);
+  
+  // Estado para controlar visibilidade das zonas de impacto
+  const [showImpactZones, setShowImpactZones] = useState(true);
+  
+  // Estados para busca de asteroides reais
+  const [selectedAsteroid, setSelectedAsteroid] = useState(null);
+  const [useRealAsteroidData, setUseRealAsteroidData] = useState(false);
+  
+  // Estado para controlar o modo de simulação
+  const [simulationMode, setSimulationMode] = useState('custom'); // 'custom' ou 'neo'
+  
+  // Estado para controlar a visualização do relatório científico
+  const [showScientificReport, setShowScientificReport] = useState(false);
+  
+  // Estado para feedback visual de clique no mapa
+  const [mapClickFeedback, setMapClickFeedback] = useState(null);
+  
+  // Estado para controlar se o mapa está travado após simulação
+  const [isMapLocked, setIsMapLocked] = useState(false);
 
   // Coordenadas padrão
   const [center, setCenter] = useState([-3.7327, -38.5270]);
@@ -97,6 +138,86 @@ function AsteroidDashboard() {
   useEffect(() => {
     setCenter([simulationForm.latitude, simulationForm.longitude]);
   }, [simulationForm.latitude, simulationForm.longitude]);
+
+  // Função para lidar com clique no mapa
+  const handleMapClick = useCallback((e) => {
+    // Verificar se o mapa está travado
+    if (isMapLocked) {
+      console.log('🔒 Mapa travado - clique ignorado');
+      return;
+    }
+    
+    const { lat, lng } = e.latlng;
+    
+    // Atualizar formulário com novas coordenadas
+    setSimulationForm(prev => ({
+      ...prev,
+      latitude: lat,
+      longitude: lng
+    }));
+    
+    // Atualizar centro do mapa
+    setCenter([lat, lng]);
+    
+    // Feedback visual temporário
+    setMapClickFeedback({
+      position: [lat, lng],
+      timestamp: Date.now()
+    });
+    
+    // Limpar feedback após 2 segundos
+    setTimeout(() => {
+      setMapClickFeedback(null);
+    }, 2000);
+    
+    console.log('📍 Nova posição de impacto:', { lat, lng });
+  }, [isMapLocked]);
+
+  // Função para lidar com asteroide selecionado
+  const handleAsteroidSelected = useCallback((asteroidData) => {
+    console.log('🪨 Asteroide selecionado:', asteroidData);
+    setSelectedAsteroid(asteroidData);
+    setUseRealAsteroidData(true);
+  }, []);
+
+  // Função para lidar com dados de simulação de asteroide real
+  const handleAsteroidSimulationData = useCallback((simulationData) => {
+    console.log('📊 Dados de simulação do asteroide:', simulationData);
+    
+    // Atualizar formulário com dados reais se disponíveis
+    if (simulationData.diameter_m) {
+      setSimulationForm(prev => ({
+        ...prev,
+        diameter_m: simulationData.diameter_m,
+        velocity_kms: simulationData.velocity_kms || prev.velocity_kms,
+        impact_angle_deg: simulationData.impact_angle_deg || prev.impact_angle_deg,
+        target_type: simulationData.target_type || prev.target_type,
+        latitude: simulationData.latitude || prev.latitude,
+        longitude: simulationData.longitude || prev.longitude
+      }));
+    }
+
+    // Se temos dados de simulação completos, usar diretamente
+    if (simulationData.impact_simulation) {
+      const data = simulationData.impact_simulation;
+      const mappedData = {
+        impact_energy_mt: data.energia?.equivalente_tnt_megatons || 0,
+        seismic_magnitude: data.terremoto?.magnitude_richter || 0,
+        crater_diameter_km: data.cratera?.diametro_final_km || 0,
+        fireball_radius_km: data.fireball?.raio_queimadura_3_grau_km || 0,
+        shockwave_intensity_db: data.onda_de_choque_e_vento?.nivel_som_1km_db || 0,
+        peak_winds_kmh: (data.onda_de_choque_e_vento?.pico_vento_ms || 0) * 3.6,
+        impact_type: data.cratera?.is_airburst ? 'AIRBURST' : 'IMPACTO DIRETO',
+        timestamp: new Date(),
+        asteroid_info: simulationData.asteroid_info
+      };
+
+      console.log('🎯 Dados mapeados do asteroide real:', mappedData);
+      setSimulationData(mappedData);
+      generateZonesAndRoutes(mappedData);
+      generateAlerts(mappedData);
+    }
+  }, []);
 
   // Verificar status da API
   const checkApiStatus = useCallback(async () => {
@@ -146,7 +267,7 @@ function AsteroidDashboard() {
         id: 3,
         name: "Zona Segura Leste",
         position: [center[0], center[1] + (safeRadius / 111)],
-        capacity: 8000,
+        capacity: 8001,
         distance: safeRadius,
         type: 'safe_zone'
       },
@@ -238,7 +359,7 @@ function AsteroidDashboard() {
       });
 
       console.log('Resultado da simulação:', result);
-
+      
       if (result.success && result.data) {
         const data = result.data;
         const mappedData = {
@@ -256,6 +377,10 @@ function AsteroidDashboard() {
         setSimulationData(mappedData);
         generateZonesAndRoutes(mappedData);
         generateAlerts(mappedData);
+        
+        // Travar o mapa após simulação bem-sucedida
+        setIsMapLocked(true);
+        console.log('🔒 Mapa travado após simulação');
       } else {
         console.error('Erro na resposta da API:', result.error);
         // Criar dados de fallback para demonstração
@@ -274,8 +399,12 @@ function AsteroidDashboard() {
         setSimulationData(fallbackData);
         generateZonesAndRoutes(fallbackData);
         generateAlerts(fallbackData);
+        
+        // Travar o mapa após simulação com fallback
+        setIsMapLocked(true);
+        console.log('🔒 Mapa travado após simulação (fallback)');
       }
-    } catch (error) {
+      } catch (error) {
       console.error('Erro na simulação:', error);
       
       // Criar dados de fallback em caso de erro
@@ -294,16 +423,56 @@ function AsteroidDashboard() {
       setSimulationData(fallbackData);
       generateZonesAndRoutes(fallbackData);
       generateAlerts(fallbackData);
+      
+      // Travar o mapa após simulação com erro
+      setIsMapLocked(true);
+      console.log('🔒 Mapa travado após simulação (erro)');
     } finally {
       setLoading(false);
       setIsSimulating(false);
     }
   }, [simulationForm, generateZonesAndRoutes, generateAlerts, isSimulating, loading]);
 
+  // Função para nova simulação (libera o mapa)
+  const handleNewSimulation = useCallback(() => {
+    // Liberar o mapa
+    setIsMapLocked(false);
+    
+    // Limpar dados da simulação anterior
+    setSimulationData(null);
+    setDangerZones([]);
+    setEvacuationRoutes([]);
+    setShelters([]);
+    setSafeZones([]);
+    setOptimalRoutes([]);
+    setAiOptimizedRoutes([]);
+    setAlerts([]);
+    
+    // Limpar feedback de clique
+    setMapClickFeedback(null);
+    
+    console.log('🔄 Nova simulação iniciada - mapa liberado');
+  }, []);
+
   // Função para atualizar rotas otimizadas por IA
-  const handleAIRoutesUpdate = useCallback((routes) => {
-    console.log('🧠 Rotas otimizadas por IA recebidas:', routes);
-    setAiOptimizedRoutes(routes);
+  const handleAIRoutesUpdate = useCallback((data) => {
+    console.log('🧠 Dados recebidos do AIRouteOptimizer:', data);
+    
+    // Verificar se são rotas ou safe zones
+    if (Array.isArray(data)) {
+      // Se todos os itens têm propriedades de rota otimizada
+      if (data.length > 0 && (data[0].route_coordinates || data[0].total_distance_km)) {
+        setOptimalRoutes(data);
+      }
+      // Se todos os itens têm propriedades de rota simples
+      else if (data.length > 0 && (data[0].from || data[0].distance)) {
+        setAiOptimizedRoutes(data);
+      } 
+      // Se todos os itens têm propriedades de safe zone
+      else if (data.length > 0 && (data[0].safety_score || data[0].distance_from_impact_km)) {
+        setSafeZones(data);
+      }
+    }
   }, []);
 
   // Atualização automática apenas do status da API
@@ -332,58 +501,37 @@ function AsteroidDashboard() {
   });
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${
-      darkMode 
-        ? 'bg-gray-900 text-white' 
-        : 'bg-gray-50 text-gray-900'
-    }`}>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 text-gray-900">
       {/* Header Fixo */}
-      <header className={`fixed top-0 left-0 right-0 z-50 border-b transition-colors duration-300 ${
-        darkMode 
-          ? 'bg-gray-800 border-gray-700' 
-          : 'bg-white border-gray-200'
-      }`}>
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-200 shadow-sm">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-6">
               <div className="flex items-center space-x-3">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  darkMode ? 'bg-blue-600' : 'bg-blue-500'
-                }`}>
+                <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
                   <span className="text-xl">🌌</span>
                 </div>
-            <div>
-                  <h1 className="text-xl font-bold">COSMOS SENTINEL</h1>
-                  <p className="text-sm opacity-70">Sistema de Monitoramento</p>
+                <div>
+                  <h1 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-blue-600 bg-clip-text text-transparent">COSMOS SENTINEL</h1>
+                  <p className="text-sm text-gray-600">Sistema de Evacuação Inteligente</p>
                 </div>
               </div>
+            </div>
           </div>
           
           <div className="flex items-center space-x-6">
               <div className="flex items-center space-x-4">
                 <div className={`px-3 py-1 rounded-full text-sm font-medium ${
                   apiStatus === 'online' 
-                    ? 'bg-green-100 text-green-800' 
+                    ? 'bg-green-100 text-green-800 border border-green-200' 
                     : apiStatus === 'connecting'
-                    ? 'bg-yellow-100 text-yellow-800'
-                    : 'bg-red-100 text-red-800'
+                    ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                    : 'bg-red-100 text-red-800 border border-red-200'
                 }`}>
-                  {apiStatus === 'online' ? '🟢 Online' : 
-                   apiStatus === 'connecting' ? '🟡 Conectando' : '🔴 Offline'}
-                </div>
-                <Clock />
+                  {apiStatus === 'online' ? '🟢 Backend Online' : 
+                   apiStatus === 'connecting' ? '🟡 Conectando' : '🔴 Backend Offline'}
               </div>
-              
-              <button
-                onClick={() => setDarkMode(!darkMode)}
-                className={`p-2 rounded-lg transition-colors duration-200 will-change-auto ${
-                  darkMode 
-                    ? 'hover:bg-gray-700' 
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                {darkMode ? '☀️' : '🌙'}
-              </button>
+                <Clock className="w-5 h-5 text-gray-600" />
             </div>
           </div>
         </div>
@@ -392,17 +540,120 @@ function AsteroidDashboard() {
       {/* Layout Principal */}
       <div className="pt-20 flex h-screen">
         {/* Painel Lateral - Responsivo */}
-        <aside className={`w-80 border-r transition-colors duration-300 ${
-          darkMode 
-            ? 'bg-gray-800 border-gray-700' 
-            : 'bg-white border-gray-200'
-        } hidden lg:block`}>
-          <div className="p-6 h-full flex flex-col overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200 dark:scrollbar-thumb-gray-600 dark:scrollbar-track-gray-800">
-            <h2 className="text-lg font-semibold mb-6">Filtros e Controles</h2>
+        <aside className="w-80 border-r border-gray-200 bg-white/80 backdrop-blur-sm shadow-sm hidden lg:block">
+          <div className="p-6 h-full flex flex-col overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200">
+            <h2 className="text-lg font-semibold mb-6 text-gray-800">Filtros e Controles</h2>
             
-            {/* Formulário de Simulação */}
+            {/* Seletor de Modo de Simulação */}
+            <div className="mb-6">
+              <h3 className="text-md font-semibold text-purple-600 mb-3">Modo de Simulação</h3>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setSimulationMode('custom')}
+                  className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all duration-200 ${
+                    simulationMode === 'custom'
+                      ? 'bg-blue-600 text-white shadow-lg transform scale-105'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="text-lg">⚙️</span>
+                    <span>Personalizada</span>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setSimulationMode('neo')}
+                  className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all duration-200 ${
+                    simulationMode === 'neo'
+                      ? 'bg-purple-600 text-white shadow-lg transform scale-105'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="text-lg">🪨</span>
+                    <span>NEOs Reais</span>
+                  </div>
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                {simulationMode === 'custom' 
+                  ? 'Configure parâmetros manualmente para simulação personalizada'
+                  : 'Use dados reais de asteroides catalogados pela NASA'
+                }
+              </p>
+            </div>
+            
+            {/* Formulário de Simulação - Personalizada */}
+            {simulationMode === 'custom' && (
             <div className="space-y-4 flex-1">
-              <h3 className="text-md font-semibold text-blue-400">Parâmetros do Meteoro</h3>
+              <h3 className="text-md font-semibold text-blue-600">Parâmetros do Meteoro</h3>
+              
+              {/* Presets Rápidos */}
+              <div className="mb-4">
+                <h4 className="text-sm font-medium mb-2 text-purple-400">Presets Rápidos</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => {
+                      setSimulationForm({
+                        diameter_m: 50,
+                        velocity_kms: 20,
+                        impact_angle_deg: 45,
+                        target_type: 'solo',
+                        latitude: -3.7327,
+                        longitude: -38.5270
+                      });
+                    }}
+                    className="text-xs p-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-all duration-150 ease-in-out transform hover:scale-105 preset-button"
+                  >
+                    Pequeno
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSimulationForm({
+                        diameter_m: 200,
+                        velocity_kms: 50,
+                        impact_angle_deg: 30,
+                        target_type: 'rocha',
+                        latitude: -3.7327,
+                        longitude: -38.5270
+                      });
+                    }}
+                    className="text-xs p-2 bg-orange-600 hover:bg-orange-700 text-white rounded transition-all duration-150 ease-in-out transform hover:scale-105 preset-button"
+                  >
+                    Médio
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSimulationForm({
+                        diameter_m: 500,
+                        velocity_kms: 70,
+                        impact_angle_deg: 15,
+                        target_type: 'oceano',
+                        latitude: -3.7327,
+                        longitude: -38.5270
+                      });
+                    }}
+                    className="text-xs p-2 bg-red-600 hover:bg-red-700 text-white rounded transition-all duration-150 ease-in-out transform hover:scale-105 preset-button"
+                  >
+                    Grande
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSimulationForm({
+                        diameter_m: 1000,
+                        velocity_kms: 90,
+                        impact_angle_deg: 5,
+                        target_type: 'rocha',
+                        latitude: -3.7327,
+                        longitude: -38.5270
+                      });
+                    }}
+                    className="text-xs p-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-all duration-150 ease-in-out transform hover:scale-105 preset-button"
+                  >
+                    Catastrófico
+                  </button>
+                </div>
+              </div>
               
                 <div>
                 <label className="block text-sm font-medium mb-2">
@@ -556,11 +807,36 @@ function AsteroidDashboard() {
               <p className="text-xs text-gray-500">
                 Coordenadas do ponto de impacto
               </p>
-          </div>
+              
+              {/* Instrução para clique no mapa */}
+              <div className={`mt-2 p-3 rounded-lg border ${
+                isMapLocked 
+                  ? 'bg-red-50 border-red-200' 
+                  : 'bg-blue-50 border-blue-200'
+              }`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={isMapLocked ? 'text-red-600' : 'text-blue-600'}>
+                    {isMapLocked ? '🔒' : '💡'}
+                  </span>
+                  <span className={`text-sm font-medium ${
+                    isMapLocked ? 'text-red-800' : 'text-blue-800'
+                  }`}>
+                    {isMapLocked ? 'Mapa Travado:' : 'Dica:'}
+                  </span>
+                </div>
+                <p className={`text-xs ${
+                  isMapLocked ? 'text-red-700' : 'text-blue-700'
+                }`}>
+                  {isMapLocked 
+                    ? 'Execute uma nova simulação para liberar o mapa e permitir mudanças de posição'
+                    : 'Clique em qualquer lugar do mapa para atualizar automaticamente a posição de impacto'
+                  }
+                </p>
+              </div>
 
-            {/* Filtros */}
-            <div className="space-y-4 mt-6">
-              <h3 className="text-md font-semibold text-green-400">Filtros de Visualização</h3>
+              {/* Filtros */}
+              <div className="space-y-4 mt-6">
+                <h3 className="text-md font-semibold text-green-400">Filtros de Visualização</h3>
               
               <div>
                 <label className="block text-sm font-medium mb-2">Severidade</label>
@@ -615,76 +891,40 @@ function AsteroidDashboard() {
                   <option value="7d">Últimos 7 dias</option>
                 </select>
               </div>
-            </div>
-
-            {/* Botões de Preset */}
-            <div className="mt-4">
-              <h4 className="text-sm font-medium mb-2 text-purple-400">Presets Rápidos</h4>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => {
-                    setSimulationForm({
-                      diameter_m: 50,
-                      velocity_kms: 20,
-                      impact_angle_deg: 45,
-                      target_type: 'solo',
-                      latitude: -3.7327,
-                      longitude: -38.5270
-                    });
-                  }}
-                  className="text-xs p-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-all duration-150 ease-in-out transform hover:scale-105 preset-button"
-                >
-                  Pequeno
-                </button>
-                <button
-                  onClick={() => {
-                    setSimulationForm({
-                      diameter_m: 200,
-                      velocity_kms: 50,
-                      impact_angle_deg: 30,
-                      target_type: 'rocha',
-                      latitude: -3.7327,
-                      longitude: -38.5270
-                    });
-                  }}
-                  className="text-xs p-2 bg-orange-600 hover:bg-orange-700 text-white rounded transition-all duration-150 ease-in-out transform hover:scale-105 preset-button"
-                >
-                  Médio
-                </button>
-                <button
-                  onClick={() => {
-                    setSimulationForm({
-                      diameter_m: 500,
-                      velocity_kms: 70,
-                      impact_angle_deg: 15,
-                      target_type: 'oceano',
-                      latitude: -3.7327,
-                      longitude: -38.5270
-                    });
-                  }}
-                  className="text-xs p-2 bg-red-600 hover:bg-red-700 text-white rounded transition-all duration-150 ease-in-out transform hover:scale-105 preset-button"
-                >
-                  Grande
-                </button>
-                <button
-                  onClick={() => {
-                    setSimulationForm({
-                      diameter_m: 1000,
-                      velocity_kms: 90,
-                      impact_angle_deg: 5,
-                      target_type: 'rocha',
-                      latitude: -3.7327,
-                      longitude: -38.5270
-                    });
-                  }}
-                  className="text-xs p-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-all duration-150 ease-in-out transform hover:scale-105 preset-button"
-                >
-                  Catastrófico
-                </button>
+              
+              {/* Checkbox para controlar visibilidade das zonas de impacto */}
+              <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                <input
+                  type="checkbox"
+                  id="showImpactZones"
+                  checked={showImpactZones}
+                  onChange={(e) => setShowImpactZones(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                />
+                <label htmlFor="showImpactZones" className="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                  Mostrar Zonas de Impacto
+                </label>
+              </div>
+              <p className="text-xs text-gray-500">
+                Controla a visibilidade dos círculos de impacto no mapa
+              </p>
               </div>
             </div>
+            )}
 
-            {/* Botão de Simulação */}
+            {/* Busca de Asteroides Reais - Modo NEO */}
+            {simulationMode === 'neo' && (
+            <div className="space-y-4 flex-1">
+              <NEOAsteroidSearch 
+                onAsteroidSelected={handleAsteroidSelected}
+                onSimulationData={handleAsteroidSimulationData}
+              />
+            </div>
+            )}
+
+
+            {/* Botão de Simulação - Modo Personalizado */}
+            {simulationMode === 'custom' && (
             <div className="mt-6">
               <button
                 onClick={runSimulation}
@@ -716,6 +956,7 @@ function AsteroidDashboard() {
                     </div>
               )}
             </div>
+            )}
 
             {/* Status da Simulação */}
             {simulationData && (
@@ -736,6 +977,22 @@ function AsteroidDashboard() {
                   simulationData={simulationData}
                   onRoutesUpdate={handleAIRoutesUpdate}
                 />
+              </div>
+            )}
+
+            {/* Botão para Relatório Científico */}
+            {simulationData && (
+              <div className="mt-6">
+                <button
+                  onClick={() => setShowScientificReport(true)}
+                  className="w-full py-3 px-4 rounded-lg font-medium transition-all duration-200 ease-in-out bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 hover:shadow-lg transform hover:scale-105 text-white flex items-center justify-center space-x-2"
+                >
+                  <span>📊</span>
+                  <span>Relatório Científico Detalhado</span>
+                </button>
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  Análise científica completa com magnitudes do desastre e planos de contenção
+                </p>
               </div>
             )}
 
@@ -769,6 +1026,29 @@ function AsteroidDashboard() {
                 </button>
               </div>
               
+              {/* Botão Flutuante de Nova Simulação */}
+              {isMapLocked && (
+                <div className="absolute top-4 left-4 z-10">
+                  <button
+                    onClick={handleNewSimulation}
+                    className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-3 rounded-lg shadow-lg transition-all duration-200 transform hover:scale-105 flex items-center gap-2 font-semibold"
+                  >
+                    <span className="text-lg">🔄</span>
+                    <span>Nova Simulação</span>
+                  </button>
+                </div>
+              )}
+              
+              {/* Indicador de Mapa Travado */}
+              {isMapLocked && (
+                <div className="absolute bottom-4 left-4 z-10">
+                  <div className="bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+                    <span className="text-lg">🔒</span>
+                    <span className="text-sm font-medium">Mapa Travado</span>
+                  </div>
+                </div>
+              )}
+              
                   <MapContainer
                 center={center}
                 zoom={8}
@@ -791,6 +1071,7 @@ function AsteroidDashboard() {
                 }`}
               >
                 <MapController isFullscreen={isFullscreen} simulationData={simulationData} />
+                <MapClickHandler onMapClick={handleMapClick} />
                 
                     <TileLayer
                   url={darkMode 
@@ -811,7 +1092,7 @@ function AsteroidDashboard() {
                     </Marker>
                     
                 {/* Zonas de Perigo */}
-                {dangerZones.map((zone, index) => (
+                {showImpactZones && dangerZones.map((zone, index) => (
                     <Circle
                     key={index}
                     center={center}
@@ -846,7 +1127,7 @@ function AsteroidDashboard() {
                         <h3 className="font-bold text-green-600">🏠 {shelter.name}</h3>
                         <p className="text-sm">Capacidade: {shelter.capacity.toLocaleString()} pessoas</p>
                         <p className="text-sm">Distância: {shelter.distance.toFixed(1)} km</p>
-                      </div>
+                </div>
                     </Popup>
                   </Marker>
                 ))}
@@ -861,7 +1142,7 @@ function AsteroidDashboard() {
                 ))}
                 
                 {/* Rotas Otimizadas por IA */}
-                {aiOptimizedRoutes.map(route => (
+                {aiOptimizedRoutes.filter(route => route.from && route.to && route.from[0] && route.from[1] && route.to[0] && route.to[1]).map(route => (
                   <Polyline
                     key={`ai_${route.id}`}
                     positions={[route.from, route.to]}
@@ -875,7 +1156,7 @@ function AsteroidDashboard() {
                 ))}
                 
                 {/* Marcadores para rotas de IA */}
-                {aiOptimizedRoutes.map(route => (
+                {aiOptimizedRoutes.filter(route => route.to && route.to[0] && route.to[1]).map(route => (
                   <Marker key={`ai_marker_${route.id}`} position={route.to}>
                     <Popup>
                       <div className="text-center">
@@ -891,20 +1172,98 @@ function AsteroidDashboard() {
                     </Popup>
                   </Marker>
                 ))}
+
+                {/* Safe Zones */}
+                {safeZones.filter(zone => zone.latitude && zone.longitude).map((zone, index) => (
+                  <Marker key={`safe_zone_${index}`} position={[zone.latitude, zone.longitude]}>
+                    <Popup>
+                      <div className="text-center">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                          <div 
+                            className="w-4 h-4 rounded-full" 
+                            style={{ backgroundColor: zone.color || '#10B981' }}
+                          ></div>
+                          <h3 className="font-bold text-green-600">🛡️ {zone.name}</h3>
+                        </div>
+                        <p className="text-sm"><strong>Distância:</strong> {zone.distance_from_impact_km} km</p>
+                        <p className="text-sm"><strong>Score de Segurança:</strong> {(zone.safety_score * 100).toFixed(0)}%</p>
+                        <p className="text-sm"><strong>Capacidade:</strong> {zone.capacity?.toLocaleString()} pessoas</p>
+                        <div className="mt-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                          Zona Segura Calculada
+                        </div>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))}
+
+                {/* Rotas Otimizadas */}
+                {optimalRoutes.filter(route => route.route_coordinates && route.route_coordinates.length > 0).map((route, index) => (
+                  <Polyline
+                    key={`optimal_route_${index}`}
+                    positions={route.route_coordinates}
+                    pathOptions={{ 
+                      color: route.color || '#3B82F6', 
+                      weight: 3, 
+                      opacity: 0.9,
+                      dashArray: '5, 10'
+                    }}
+                  />
+                ))}
+                
+                {/* Marcadores para rotas otimizadas */}
+                {optimalRoutes.filter(route => route.zone_coordinates && route.zone_coordinates[0] && route.zone_coordinates[1]).map((route, index) => (
+                  <Marker key={`optimal_marker_${index}`} position={[route.zone_coordinates[1], route.zone_coordinates[0]]}>
+                    <Popup>
+                      <div className="text-center">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                          <div 
+                            className="w-4 h-4 rounded-full" 
+                            style={{ backgroundColor: route.color || '#3B82F6' }}
+                          ></div>
+                          <h3 className="font-bold text-blue-600">🗺️ {route.zone_name}</h3>
+                        </div>
+                        <p className="text-sm"><strong>Distância:</strong> {route.total_distance_km} km</p>
+                        <p className="text-sm"><strong>Tempo:</strong> {route.estimated_time_minutes} min</p>
+                        <p className="text-sm"><strong>Score de Segurança:</strong> {(route.safety_score * 100).toFixed(0)}%</p>
+                        <p className="text-sm"><strong>Waypoints:</strong> {route.waypoints_count}</p>
+                        <p className="text-sm"><strong>Algoritmo:</strong> {route.algorithm_used}</p>
+                        <div className="mt-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                          Rota Otimizada Calculada
+                    </div>
+                  </div>
+                    </Popup>
+                  </Marker>
+                ))}
+
+                {/* Feedback visual de clique no mapa */}
+                {mapClickFeedback && (
+                  <Marker position={mapClickFeedback.position}>
+                    <Popup>
+                      <div className="text-center">
+                        <h3 className="font-bold text-green-600 mb-2">📍 Nova Posição Selecionada</h3>
+                        <p className="text-sm">
+                          <strong>Latitude:</strong> {mapClickFeedback.position[0].toFixed(6)}
+                        </p>
+                        <p className="text-sm">
+                          <strong>Longitude:</strong> {mapClickFeedback.position[1].toFixed(6)}
+                        </p>
+                        <div className="mt-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                          Posição atualizada automaticamente
+                        </div>
+                      </div>
+                    </Popup>
+                  </Marker>
+                )}
               </MapContainer>
             </div>
             </div>
 
           {/* Painel de Alertas - Responsivo */}
-          <aside className={`w-full lg:w-80 border-l transition-colors duration-300 ${
-            darkMode 
-              ? 'bg-gray-800 border-gray-700' 
-              : 'bg-white border-gray-200'
-          }`}>
+          <aside className="w-full lg:w-80 border-l border-gray-200 bg-white/80 backdrop-blur-sm shadow-sm">
             <div className="p-6 h-full flex flex-col">
-              <h2 className="text-lg font-semibold mb-6">Alertas Recentes</h2>
+              <h2 className="text-lg font-semibold mb-6 text-gray-800">Alertas Recentes</h2>
               
-              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200 dark:scrollbar-thumb-gray-600 dark:scrollbar-track-gray-800">
+              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200">
                 <div className="space-y-4 pr-2">
                   {filteredAlerts.length === 0 ? (
                     <div className="text-center py-8 opacity-60">
@@ -948,6 +1307,27 @@ function AsteroidDashboard() {
           </aside>
         </main>
       </div>
+
+      {/* Relatório Científico Modal */}
+      {showScientificReport && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
+          <div className="absolute inset-0 overflow-y-auto">
+            <div className="relative min-h-full">
+              <button
+                onClick={() => setShowScientificReport(false)}
+                className="fixed top-4 right-4 z-10 p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <span className="text-white text-xl">✕</span>
+              </button>
+              <ScientificReport 
+                simulationData={simulationData}
+                asteroidData={selectedAsteroid}
+                onClose={() => setShowScientificReport(false)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

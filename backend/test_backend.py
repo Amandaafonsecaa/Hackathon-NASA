@@ -28,7 +28,7 @@ def main():
     print("🚀 COSMOS SENTINEL - TESTE DO BACKEND")
     print("=" * 50)
 
-    base_url = "http://localhost:8000"
+    base_url = "http://localhost:8001"
 
     endpoints = [
         ("/", "Root"),
@@ -73,7 +73,7 @@ def main():
         print("✅ Backend pronto para uso!")
     else:
         print("⚠️  ALGUNS ENDPOINTS FALHARAM.")
-        print("💡 Verifique se o servidor está rodando em http://localhost:8000")
+        print("💡 Verifique se o servidor está rodando em http://localhost:8001")
 
     return passed == total
 

@@ -319,7 +319,7 @@ def get_client_example() -> Dict:
     example_code = {
         "javascript": """
 // Exemplo de cliente WebSocket em JavaScript
-const ws = new WebSocket('ws://localhost:8000/api/v1/ws/traffic?client_id=my_client');
+const ws = new WebSocket('ws://localhost:8001/api/v1/ws/traffic?client_id=my_client');
 
 ws.onopen = function() {
     console.log('Conectado ao WebSocket');
@@ -372,7 +372,7 @@ import websockets
 import json
 
 async def websocket_client():
-    uri = "ws://localhost:8000/api/v1/ws/traffic?client_id=python_client"
+    uri = "ws://localhost:8001/api/v1/ws/traffic?client_id=python_client"
     
     async with websockets.connect(uri) as websocket:
         # Inscrever em atualizações

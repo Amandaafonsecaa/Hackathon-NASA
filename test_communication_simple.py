@@ -11,7 +11,7 @@ def test_backend():
     print("TESTE DE COMUNICACAO FRONTEND <-> BACKEND")
     print("=" * 60)
     
-    base_url = "http://localhost:8000"
+    base_url = "http://localhost:8001"
     
     # Testar endpoints principais
     endpoints = [
@@ -51,15 +51,15 @@ def test_frontend_connection():
     api_calls = [
         {
             "name": "Teste de Conexao",
-            "url": "http://localhost:8000/api/v1/"
+            "url": "http://localhost:8001/api/v1/"
         },
         {
             "name": "Dados de Asteroide", 
-            "url": "http://localhost:8000/api/v1/neo/test"
+            "url": "http://localhost:8001/api/v1/neo/test"
         },
         {
             "name": "Simulacao de Impacto",
-            "url": "http://localhost:8000/api/v1/simular/test"
+            "url": "http://localhost:8001/api/v1/simular/test"
         }
     ]
     
@@ -85,9 +85,9 @@ def check_services():
     
     # Verificar backend
     try:
-        response = requests.get("http://localhost:8000/health", timeout=2)
+        response = requests.get("http://localhost:8001/health", timeout=2)
         if response.status_code == 200:
-            print("[OK] Backend rodando em http://localhost:8000")
+            print("[OK] Backend rodando em http://localhost:8001")
         else:
             print("[ERRO] Backend nao esta respondendo corretamente")
     except:
@@ -123,7 +123,7 @@ def main():
     print("   se comunicar com o backend normalmente.")
     print("2. Se houver erros, verifique se ambos os serviços estao rodando.")
     print("3. Acesse http://localhost:3000 para ver o frontend.")
-    print("4. Acesse http://localhost:8000/docs para ver a API do backend.")
+    print("4. Acesse http://localhost:8001/docs para ver a API do backend.")
 
 if __name__ == "__main__":
     main()

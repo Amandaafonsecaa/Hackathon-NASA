@@ -25,7 +25,7 @@ def start_backend():
             sys.executable, "-m", "uvicorn", 
             "main:app", 
             "--host", "0.0.0.0", 
-            "--port", "8000"
+            "--port", "8001"
         ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
         # Voltar para diretório original
@@ -36,7 +36,7 @@ def start_backend():
         
         # Verificar se está funcionando
         try:
-            response = requests.get("http://localhost:8000/health", timeout=5)
+            response = requests.get("http://localhost:8001/health", timeout=5)
             if response.status_code == 200:
                 print("[OK] Backend iniciado com sucesso!")
                 return process
@@ -112,8 +112,8 @@ def main():
     print("[SUCCESS] COSMOS SENTINEL INICIADO COM SUCESSO!")
     print("=" * 60)
     print("Frontend: http://localhost:3000")
-    print("Backend:  http://localhost:8000")
-    print("API Docs: http://localhost:8000/docs")
+    print("Backend:  http://localhost:8001")
+    print("API Docs: http://localhost:8001/docs")
     print("\nPressione Ctrl+C para parar tudo")
     
     # Abrir navegador

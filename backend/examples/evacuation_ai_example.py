@@ -10,10 +10,10 @@ import time
 from typing import Dict, List
 
 # Configuração da API
-API_BASE_URL = "http://localhost:8000/api/v1"
+API_BASE_URL = "http://localhost:8001/api/v1"
 EVACUATION_AI_URL = f"{API_BASE_URL}/evacuation-ai"
 TRAFFIC_AI_URL = f"{API_BASE_URL}/traffic-ai"
-WEBSOCKET_URL = "ws://localhost:8000/api/v1/ws/traffic"
+WEBSOCKET_URL = "ws://localhost:8001/api/v1/ws/traffic"
 
 def create_sample_evacuation_request() -> Dict:
     """Cria request de exemplo para análise de evacuação."""
@@ -97,7 +97,7 @@ def create_sample_evacuation_request() -> Dict:
             "id": "safe_zone_002",
             "name": "Zona Segura Sul",
             "type": "safe_zone", 
-            "capacity": 8000,
+            "capacity": 8001,
             "latitude": -23.6205,
             "longitude": -46.6933
         }
@@ -386,7 +386,7 @@ def main():
             
     except requests.exceptions.ConnectionError:
         print("\n❌ Erro: Não foi possível conectar à API")
-        print("💡 Certifique-se de que o servidor está rodando em http://localhost:8000")
+        print("💡 Certifique-se de que o servidor está rodando em http://localhost:8001")
         
     except Exception as e:
         print(f"\n❌ Erro inesperado: {e}")

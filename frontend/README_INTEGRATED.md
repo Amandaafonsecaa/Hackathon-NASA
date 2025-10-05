@@ -35,7 +35,7 @@ cd backend
 pip install -r requirements.txt
 python main.py
 ```
-O backend deve estar rodando em `http://localhost:8000`
+O backend deve estar rodando em `http://localhost:8001`
 
 ### 2. **Frontend**
 ```bash
@@ -96,7 +96,7 @@ frontend/
 
 ### **URL Base**
 ```javascript
-const baseURL = 'http://localhost:8000/api/v1';
+const baseURL = 'http://localhost:8001/api/v1';
 ```
 
 ### **Timeout**

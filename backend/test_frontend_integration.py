@@ -43,7 +43,7 @@ def test_cors():
                 "Access-Control-Request-Headers": "Content-Type"
             }
             response = requests.options(
-                "http://localhost:8000/api/v1/connection-test",
+                "http://localhost:8001/api/v1/connection-test",
                 headers=headers,
                 timeout=5
             )
@@ -64,7 +64,7 @@ def main():
     print("🌐 COSMOS SENTINEL - TESTE DE INTEGRAÇÃO COM FRONTEND")
     print("=" * 60)
     
-    base_url = "http://localhost:8000"
+    base_url = "http://localhost:8001"
     
     # Endpoints que o frontend pode usar
     endpoints = [
@@ -117,10 +117,10 @@ def main():
         print("\n🎉 INTEGRAÇÃO COM FRONTEND PERFEITA!")
         print("✅ Backend pronto para uso com frontend!")
         print("\n📋 Endpoints disponíveis para o frontend:")
-        print("   - http://localhost:8000/api/v1/")
-        print("   - http://localhost:8000/api/v1/connection-test")
-        print("   - http://localhost:8000/api/v1/system-info")
-        print("   - http://localhost:8000/docs (documentação)")
+        print("   - http://localhost:8001/api/v1/")
+        print("   - http://localhost:8001/api/v1/connection-test")
+        print("   - http://localhost:8001/api/v1/system-info")
+        print("   - http://localhost:8001/docs (documentação)")
         
         print("\n🔧 Configuração CORS:")
         print("   - Origens permitidas: localhost:3000, 3001, 5173, 8080")

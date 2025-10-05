@@ -13,7 +13,7 @@ import os
 def test_backend():
     """Testa se o backend está funcionando"""
     try:
-        response = requests.get("http://localhost:8000/health", timeout=5)
+        response = requests.get("http://localhost:8001/health", timeout=5)
         if response.status_code == 200:
             print("✅ Backend funcionando")
             return True
@@ -56,8 +56,8 @@ def main():
         print("🎉 SISTEMA COMPLETO FUNCIONANDO!")
         print("\n🌐 Acesse o sistema:")
         print("   Frontend: http://localhost:3000")
-        print("   Backend:  http://localhost:8000")
-        print("   API Docs: http://localhost:8000/docs")
+        print("   Backend:  http://localhost:8001")
+        print("   API Docs: http://localhost:8001/docs")
         
         # Abrir navegador
         print("\n🚀 Abrindo navegador...")
@@ -67,7 +67,7 @@ def main():
     else:
         print("⚠️  ALGUNS SERVIÇOS NÃO ESTÃO FUNCIONANDO")
         print("\n💡 Para iniciar os serviços:")
-        print("   1. Backend:  cd backend && uvicorn main_simple:app --host 0.0.0.0 --port 8000")
+        print("   1. Backend:  cd backend && uvicorn main_simple:app --host 0.0.0.0 --port 8001")
         print("   2. Frontend: cd frontend && python -m http.server 3000")
         return False
 

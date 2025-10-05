@@ -11,7 +11,7 @@ def test_backend_response():
     print("TESTANDO RESPOSTA DO BACKEND")
     print("=" * 50)
     
-    url = "http://localhost:8000/api/v1/simular"
+    url = "http://localhost:8001/api/v1/simular"
     data = {
         "diameter_m": 100,
         "velocity_kms": 35,
@@ -52,7 +52,7 @@ def test_frontend_cors():
             'Content-Type': 'application/json'
         }
         
-        response = requests.options("http://localhost:8000/api/v1/simular", headers=headers)
+        response = requests.options("http://localhost:8001/api/v1/simular", headers=headers)
         
         if 'Access-Control-Allow-Origin' in response.headers:
             print("[OK] CORS configurado corretamente")

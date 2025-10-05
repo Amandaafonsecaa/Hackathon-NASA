@@ -1,7 +1,7 @@
 // API Service para integração com o backend Cosmos Sentinel
 class CosmosSentinelAPI {
   constructor() {
-    this.baseURL = 'http://localhost:8000/api/v1';
+    this.baseURL = 'http://localhost:8001/api/v1';
     this.timeout = 10000; // 10 segundos (reduzido de 30)
   }
 
@@ -68,6 +68,15 @@ class CosmosSentinelAPI {
 
   async getEnhancedAsteroidData(asteroidId) {
     return this.request(`/neo/${asteroidId}/enhanced`);
+  }
+
+  async getNearEarthAsteroids(startDate, endDate, limit = 20) {
+    const params = new URLSearchParams({
+      start_date: startDate,
+      end_date: endDate,
+      limit: limit
+    });
+    return this.request(`/neo/near-earth?${params}`);
   }
 
   async getAsteroidImpactAnalysis(asteroidId, impactLat, impactLon, impactAngle = 45, targetType = 'rocha') {
@@ -158,6 +167,21 @@ class CosmosSentinelAPI {
     return this.request(`/integrated-evacuation/update-scenario`, {
       method: 'POST',
       body: JSON.stringify({ scenario_id: scenarioId, ...updateData }),
+    });
+  }
+
+  // ===== SAFE ZONES =====
+  async calculateSafeZones(safeZoneData) {
+    return this.request('/safe-zones/calculate', {
+      method: 'POST',
+      body: JSON.stringify(safeZoneData),
+    });
+  }
+
+  async calculateOptimalPaths(routeData) {
+    return this.request('/routes/optimal-paths', {
+      method: 'POST',
+      body: JSON.stringify(routeData),
     });
   }
 
@@ -311,7 +335,7 @@ class CosmosSentinelAPI {
   // ===== UTILITÁRIOS =====
   async checkBackendHealth() {
     // Health check não precisa do prefixo /api/v1
-    const url = 'http://localhost:8000/health';
+    const url = 'http://localhost:8001/health';
     const config = {
       method: 'GET',
       headers: {

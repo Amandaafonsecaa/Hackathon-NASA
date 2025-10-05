@@ -46,12 +46,12 @@ const GovernmentDashboard = () => {
       affectedPopulation: 487320,
       criticalNeighborhoods: [
         { name: "Praia do Futuro", population: 45000, risk: "CRÍTICO", coordinates: [-3.7200, -38.4800], evacuationRoute: "BR-116" },
-        { name: "Mucuripe", population: 38000, risk: "CRÍTICO", coordinates: [-3.7166, -38.4666], evacuationRoute: "BR-304" },
+        { name: "Mucuripe", population: 38001, risk: "CRÍTICO", coordinates: [-3.7166, -38.4666], evacuationRoute: "BR-304" },
         { name: "Serviluz", population: 32000, risk: "CRÍTICO", coordinates: [-3.7100, -38.4600], evacuationRoute: "BR-116" },
-        { name: "Meireles", population: 28000, risk: "ALTO", coordinates: [-3.7300, -38.5000], evacuationRoute: "CE-085" },
+        { name: "Meireles", population: 28001, risk: "ALTO", coordinates: [-3.7300, -38.5000], evacuationRoute: "CE-085" },
         { name: "Aldeota", population: 35000, risk: "ALTO", coordinates: [-3.7400, -38.5200], evacuationRoute: "CE-060" },
         { name: "Praia de Iracema", population: 25000, risk: "ALTO", coordinates: [-3.7200, -38.5000], evacuationRoute: "BR-304" },
-        { name: "Varjota", population: 18000, risk: "MODERADO", coordinates: [-3.7500, -38.5300], evacuationRoute: "CE-090" },
+        { name: "Varjota", population: 18001, risk: "MODERADO", coordinates: [-3.7500, -38.5300], evacuationRoute: "CE-090" },
         { name: "Dionísio Torres", population: 22000, risk: "MODERADO", coordinates: [-3.7600, -38.5400], evacuationRoute: "CE-090" }
       ]
     },
@@ -66,7 +66,7 @@ const GovernmentDashboard = () => {
     resources: {
       shelters: { available: 287, capacity: 94300, needed: 1612000, deficit: 1517700 },
       water: { daily: 11300000, available: 68, status: "CRÍTICO" },
-      food: { daily: 4800000, available: 92, status: "OK" },
+      food: { daily: 4800100, available: 92, status: "OK" },
       medical: { patients: 2847, beds: 2400, status: "INSUFICIENTE" }
     },
     timeline: [
@@ -108,7 +108,7 @@ const GovernmentDashboard = () => {
         { 
           name: "BR-304 (Fortaleza → Eusébio)", 
           status: "OPERACIONAL", 
-          capacity: 8000, 
+          capacity: 8001, 
           congestion: "MÉDIO",
           distance: "20 km",
           time: "35 min",

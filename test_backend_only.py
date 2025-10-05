@@ -32,7 +32,7 @@ def test_backend():
             sys.executable, "-m", "uvicorn", 
             "main_simple:app", 
             "--host", "0.0.0.0", 
-            "--port", "8000"
+            "--port", "8001"
         ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
         # Aguardar servidor iniciar
@@ -42,7 +42,7 @@ def test_backend():
         # Verificar se está funcionando
         print("[INFO] Testando conexão...")
         try:
-            response = requests.get("http://localhost:8000/health", timeout=10)
+            response = requests.get("http://localhost:8001/health", timeout=10)
             if response.status_code == 200:
                 print("[SUCCESS] Backend funcionando!")
                 print(f"Resposta: {response.json()}")
